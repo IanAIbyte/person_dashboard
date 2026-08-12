@@ -13,6 +13,7 @@ import { OverviewPage } from "./pages/OverviewPage";
 import { SystemPage } from "./pages/SystemPage";
 import { TopicsPage } from "./pages/TopicsPage";
 import { SocialInsightsPage, SocialTrendDetailPage } from "./pages/SocialInsightsPage";
+import { CareerPage } from "./pages/CareerPage";
 import { useVaultSync } from "./hooks/useVaultSync";
 
 const localWorkbench = import.meta.env.VITE_WORKBENCH_HOSTED !== "true";
@@ -121,6 +122,17 @@ export function App() {
               path="/social-insights/:reportId"
               element={
                 <SocialInsightsPage
+                  onOpenDocument={openDocument}
+                  syncRevision={vaultSync.revision}
+                />
+              }
+            />
+          ) : null}
+          {localWorkbench ? (
+            <Route
+              path="/career"
+              element={
+                <CareerPage
                   onOpenDocument={openDocument}
                   syncRevision={vaultSync.revision}
                 />

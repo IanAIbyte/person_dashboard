@@ -1,0 +1,459 @@
+/* 求职备战页面样式 —— 全部复用 :root 变量，块名前缀 career-。 */
+
+.page--career {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.career-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.career-source {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-faint);
+  letter-spacing: 0.02em;
+}
+
+.career-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink-soft);
+  border-radius: var(--r-pill);
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.2s var(--ease), color 0.2s var(--ease);
+}
+
+.career-refresh:hover {
+  border-color: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.career-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+.career-section__head {
+  margin-bottom: 16px;
+}
+
+.career-section__head h2 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 4px;
+}
+
+.career-section__head p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+/* 主报告 */
+.career-report {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  background: linear-gradient(135deg, var(--accent-wash), var(--surface));
+  border-color: var(--accent-soft);
+}
+
+.career-report__eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent-strong);
+}
+
+.career-report__title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 6px 0 8px;
+}
+
+.career-report__meta {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.career-report__meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.career-report__action {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  border-radius: var(--r-pill);
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s var(--ease), transform 0.2s var(--ease), box-shadow 0.2s var(--ease);
+}
+
+.career-report__action:hover {
+  background: var(--accent-strong);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-accent);
+}
+
+/* 方向 Tab */
+.career-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.career-tabs__tab {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink-soft);
+  border-radius: var(--r-pill);
+  padding: 7px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.2s var(--ease), background 0.2s var(--ease), color 0.2s var(--ease);
+}
+
+.career-tabs__tab:hover {
+  border-color: var(--accent-soft);
+}
+
+.career-tabs__tab--active {
+  background: var(--accent-wash);
+  border-color: var(--accent);
+  color: var(--accent-strong);
+  font-weight: 500;
+}
+
+/* 岗位卡片 */
+.career-roles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+.career-role-card {
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--ink-faint);
+  border-radius: var(--r-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.career-role-card--high {
+  border-left-color: var(--ok);
+}
+
+.career-role-card--mid-high,
+.career-role-card--mid {
+  border-left-color: var(--warn);
+}
+
+.career-role-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.career-role-card__id {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-strong);
+  background: var(--accent-wash);
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+}
+
+.career-role-card__match {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.career-role-card__match--high {
+  color: var(--ok);
+}
+
+.career-role-card__match--mid-high,
+.career-role-card__match--mid {
+  color: var(--warn);
+}
+
+.career-role-card__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.career-role-card__company {
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.career-role-card__facts {
+  display: flex;
+  gap: 18px;
+  margin: 0;
+}
+
+.career-role-card__facts dt {
+  font-size: 11px;
+  color: var(--ink-faint);
+  margin-bottom: 2px;
+}
+
+.career-role-card__facts dd {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.career-role-card__requirements {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.career-role-card__source {
+  font-size: 11px;
+  color: var(--ink-faint);
+  border-top: 1px dashed var(--line);
+  padding-top: 8px;
+}
+
+/* 技能差距矩阵 */
+.career-matrix-scroll {
+  overflow-x: auto;
+}
+
+.career-matrix {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.career-matrix th {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line-strong);
+  white-space: nowrap;
+}
+
+.career-matrix td {
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+  color: var(--ink-soft);
+}
+
+.career-matrix__skill {
+  font-weight: 600;
+  color: var(--ink);
+  min-width: 140px;
+}
+
+.career-matrix__question {
+  min-width: 200px;
+  max-width: 320px;
+}
+
+.career-status {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 10px;
+  border-radius: var(--r-pill);
+  white-space: nowrap;
+}
+
+.career-status--ok {
+  background: rgba(22, 163, 74, 0.1);
+  color: var(--ok);
+}
+
+.career-status--warn {
+  background: rgba(217, 119, 6, 0.1);
+  color: var(--warn);
+}
+
+.career-status--missing {
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--danger);
+}
+
+.career-status--unknown {
+  background: var(--surface-sunken);
+  color: var(--ink-faint);
+}
+
+.career-priority {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* 🟡 中优先级使用暖黄（仓库无对应变量，按语义细分状态色） */
+.career-priority--high {
+  color: var(--danger);
+}
+
+.career-priority--mid-high {
+  color: var(--warn);
+}
+
+.career-priority--mid {
+  color: #ca8a04;
+}
+
+.career-priority--none {
+  color: var(--ink-faint);
+  font-weight: 400;
+}
+
+/* 题库 */
+.career-banks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.career-bank-card {
+  text-align: left;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: var(--r-md);
+  padding: 18px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: transform 0.2s var(--ease), border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+}
+
+.career-bank-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-soft);
+  box-shadow: var(--shadow-accent);
+}
+
+.career-bank-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent-strong);
+}
+
+.career-bank-card__direction {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.career-bank-card__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+.career-bank-card__meta {
+  display: flex;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+/* 空态 / 加载 / 错误 */
+.career-empty {
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-md);
+  padding: 28px;
+  text-align: center;
+  color: var(--ink-faint);
+  font-size: 13px;
+}
+
+.career-empty--error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--danger);
+  border-color: var(--danger);
+  background: rgba(220, 38, 38, 0.04);
+}
+
+.career-loading {
+  padding-top: 8px;
+}
+
+.career-loading .skeleton {
+  border-radius: var(--r-md);
+}
+
+@media (max-width: 640px) {
+  .career-report {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .career-report__action {
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .career-report__action,
+  .career-bank-card,
+  .career-refresh,
+  .career-tabs__tab {
+    transition: none;
+  }
+}

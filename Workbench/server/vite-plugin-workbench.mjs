@@ -33,6 +33,7 @@ import {
   materialsHomePayload,
 } from "./materials.mjs";
 import { booksPayload } from "./books.mjs";
+import { careerPayload } from "./career.mjs";
 import {
   getSocialInsight,
   getSocialTrend,
@@ -1447,6 +1448,10 @@ export function workbenchApiPlugin({
 
           if (req.method === "GET" && url.pathname === "/api/social-insights") {
             return json(res, 200, listSocialInsights(await currentIndex()));
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/career") {
+            return json(res, 200, careerPayload(await currentIndex()));
           }
 
           if (req.method === "GET" && url.pathname === "/api/social-trends") {

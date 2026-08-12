@@ -503,6 +503,9 @@ function classifyDocument(relativePath) {
   if (top === "90_runs") {
     return { layer: "runs", section, kind: "run" };
   }
+  if (top === "60_career") {
+    return { layer: "career", section, kind: "career" };
+  }
   if (top === "wiki") {
     return {
       layer: "wiki",

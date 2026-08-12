@@ -416,6 +416,23 @@ export function loadSocialInsights() {
   );
 }
 
+export function loadCareer() {
+  return withFallback(
+    () => request("/api/career"),
+    {
+      available: false,
+      generatedAt: null,
+      report: null,
+      banks: [],
+      roles: {
+        A: { label: "方向 A", count: 0, items: [] },
+        B: { label: "方向 B", count: 0, items: [] },
+      },
+      matrix: [],
+    },
+  );
+}
+
 export function loadSocialInsight(reportId) {
   return withFallback(
     () => request(`/api/social-insights/${encodeURIComponent(reportId)}`),
