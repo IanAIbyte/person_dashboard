@@ -155,15 +155,14 @@ export function CareerPage({ onOpenDocument, syncRevision = 0 }) {
         eyebrow="CAREER · LOCAL"
         title="求职备战"
         description="岗位机会、技能差距矩阵与面试题库的本地备战面板。数据仅本地可见，不随公开版发布。"
-        aside={
-          <div className="metric-strip">
-            <MetricStat label="题库" value={banks.length} accent />
-            <MetricStat label="总题量" value={totalQuestions} />
-            <MetricStat label="在招岗位" value={roleTotal} />
-            <MetricStat label="待补强技能" value={gapCount} />
-          </div>
-        }
       />
+
+      <div className="metric-strip">
+        <MetricStat label="题库" value={banks.length} accent />
+        <MetricStat label="总题量" value={totalQuestions} />
+        <MetricStat label="在招岗位" value={roleTotal} />
+        <MetricStat label="待补强技能" value={gapCount} />
+      </div>
 
       <div className="career-toolbar">
         <span className="career-source">
