@@ -33,7 +33,7 @@ import {
   materialsHomePayload,
 } from "./materials.mjs";
 import { booksPayload } from "./books.mjs";
-import { careerPayload, readCareerDocument } from "./career.mjs";
+import { careerPayload, careerRelativePathFromId, readCareerDocument } from "./career.mjs";
 import {
   getSocialInsight,
   getSocialTrend,
@@ -793,6 +793,32 @@ export function workbenchApiPlugin({
   });
 
   async function indexedReaderDocument(documentId) {
+    const careerPath = careerRelativePathFromId(documentId);
+    if (careerPath) {
+      const careerDoc = await readCareerDocument(careerVaultRoot, careerPath);
+      if (!careerDoc) {
+        const error = new Error("文档不存在。");
+        error.code = "DOCUMENT_NOT_FOUND";
+        throw error;
+      }
+      const body = careerDoc.body ?? readerBodyFromContent(careerDoc.content);
+      return {
+        id: careerDoc.id,
+        relativePath: careerDoc.relativePath,
+        title: careerDoc.title,
+        layer: careerDoc.layer,
+        kind: careerDoc.kind,
+        section: null,
+        status: careerDoc.status,
+        type: careerDoc.type,
+        contentType: careerDoc.contentType,
+        updatedAt: careerDoc.updatedAt,
+        body,
+        contentHash: typeof body === "string" ? hashReaderDocumentContent(body) : null,
+        headings: careerDoc.headings ?? [],
+        wikiLinks: careerDoc.wikiLinks ?? [],
+      };
+    }
     const document = documentPayload(await currentIndex(), documentId);
     if (!document) {
       const error = new Error("文档不存在。");
@@ -1106,10 +1132,10 @@ export function workbenchApiPlugin({
 
           if (req.method === "GET" && url.pathname.startsWith("/api/documents/")) {
             const id = decodeURIComponent(url.pathname.slice("/api/documents/".length));
-            // 求职备战文档来自外部 Obsidian，带 `career:` 前缀时走独立读取器。
-            if (id.startsWith("career:")) {
-              const relativePath = id.slice("career:".length);
-              const careerDoc = await readCareerDocument(careerVaultRoot, relativePath);
+            // 求职备战文档来自外部 Obsidian，带 `career-` 前缀时走独立读取器。
+            const careerPath = careerRelativePathFromId(id);
+            if (careerPath) {
+              const careerDoc = await readCareerDocument(careerVaultRoot, careerPath);
               if (!careerDoc) return json(res, 404, { error: { message: "文档不存在。" } });
               const body = careerDoc.body ?? readerBodyFromContent(careerDoc.content);
               const outgoingLinks = (careerDoc.wikiLinks ?? [])
@@ -1573,12 +1599,23 @@ export function workbenchApiPlugin({
 
           if (req.method === "POST" && url.pathname === "/api/open") {
             const body = await readJson(req);
-            const current = await currentIndex();
-            const document = getDocument(current, body.id);
-            if (!document) return json(res, 404, { error: { message: "文档不存在。" } });
             if (!["obsidian", "finder"].includes(body.target)) {
               return json(res, 400, { error: { message: "不支持的打开方式。" } });
             }
+            const careerPath = careerRelativePathFromId(body.id);
+            if (careerPath) {
+              if (!careerVaultRoot) {
+                return json(res, 404, { error: { message: "文档不存在。" } });
+              }
+              const careerDoc = await readCareerDocument(careerVaultRoot, careerPath);
+              if (!careerDoc) return json(res, 404, { error: { message: "文档不存在。" } });
+              // 用 Obsidian 的 vault 根定位实际文件（相对路径在 careerDoc.relativePath）。
+              openLocalDocument(careerVaultRoot, { path: careerDoc.relativePath }, body.target);
+              return json(res, 200, { ok: true });
+            }
+            const current = await currentIndex();
+            const document = getDocument(current, body.id);
+            if (!document) return json(res, 404, { error: { message: "文档不存在。" } });
             openLocalDocument(vaultRoot, document, body.target);
             return json(res, 200, { ok: true });
           }

@@ -11,7 +11,25 @@ import matter from "gray-matter";
 // `简历/` 目录、一切非 md 文件、以及目录名/文件名含「简历」的路径一律不进入。
 // 本模块绝不写文件。
 
-const CAREER_ID_PREFIX = "career:";
+const CAREER_ID_PREFIX = "career-";
+
+// career 文档 id 采用 `career-<base64url(相对路径)>`，与主 vault 的 encodeId
+// 同法：既符合笔记存储的 `[A-Za-z0-9_-]+` 约束，又能可靠区分外部文档。
+function encodeCareerId(relativePath) {
+  return `${CAREER_ID_PREFIX}${Buffer.from(relativePath, "utf8").toString("base64url")}`;
+}
+
+// 从 career 文档 id 反解出相对路径；非 career id 或非法编码返回 null。
+export function careerRelativePathFromId(id) {
+  if (typeof id !== "string" || !id.startsWith(CAREER_ID_PREFIX)) return null;
+  const encoded = id.slice(CAREER_ID_PREFIX.length);
+  if (!encoded) return null;
+  try {
+    return Buffer.from(encoded, "base64url").toString("utf8");
+  } catch {
+    return null;
+  }
+}
 
 // 精确允许的入口文件（相对 CAREER_VAULT_ROOT）。
 // 含空占位文件（待编译的题库方向），点击打开「暂无内容」占位说明。
@@ -212,7 +230,7 @@ async function resolveCareerWikiLinks(root, relativePath, wikiLinks, index) {
       if (matches.length === 1) resolved = matches[0].relativePath;
     }
 
-    if (resolved) link.resolvedId = `${CAREER_ID_PREFIX}${resolved}`;
+    if (resolved) link.resolvedId = encodeCareerId(resolved);
   }
 
   return wikiLinks;
@@ -232,7 +250,7 @@ export async function readCareerDocument(root, relativePath) {
   // 空占位文件（如待编译的题库方向）：返回占位文档，避免点击 404。
   if (!content) {
     return {
-      id: `${CAREER_ID_PREFIX}${relativePath}`,
+      id: encodeCareerId(relativePath),
       relativePath,
       title,
       content: "",
@@ -257,7 +275,7 @@ export async function readCareerDocument(root, relativePath) {
     await buildCareerLinkIndex(root),
   );
   return {
-    id: `${CAREER_ID_PREFIX}${relativePath}`,
+    id: encodeCareerId(relativePath),
     relativePath,
     title,
     content,
