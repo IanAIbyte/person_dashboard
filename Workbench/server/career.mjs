@@ -14,12 +14,17 @@ import matter from "gray-matter";
 const CAREER_ID_PREFIX = "career:";
 
 // 精确允许的入口文件（相对 CAREER_VAULT_ROOT）。
+// 含空占位文件（待编译的题库方向），点击打开「暂无内容」占位说明。
 const EXACT_FILES = new Set([
   "02_Areas/职业规划/面试研究地图.md",
   "01_Projects/求职2026.md",
   "02_Areas/职业规划/题库/题库-大数据开发.md",
   "02_Areas/职业规划/题库/题库-数据仓库与建模.md",
   "02_Areas/职业规划/题库/题库-面试鸭-大数据.md",
+  "知识库迭代机制.md",
+  "02_Areas/职业规划/Prompts/面试准备提示词.md",
+  "题库-云平台与迁移.md",
+  "题库-AI Agent开发.md",
 ]);
 
 // 允许遍历的目录前缀。
@@ -196,11 +201,10 @@ async function resolveCareerWikiLinks(root, relativePath, wikiLinks, index) {
         : isAllowedCareerPath(candidate) ? candidate
           : null;
       if (!exact) continue;
-      const info = await statOptional(root, exact);
-      if (info && info.size > 0) {
-        resolved = exact;
-        break;
-      }
+      // 精确命中即解析（含空占位文件）；「空占位 vs 真实文件」的歧义由
+      // 下方 basename 匹配的 size 过滤兜底。
+      resolved = exact;
+      break;
     }
 
     if (!resolved && !rawTarget.includes("/")) {
@@ -220,11 +224,31 @@ async function resolveCareerWikiLinks(root, relativePath, wikiLinks, index) {
 export async function readCareerDocument(root, relativePath) {
   if (!root || !isAllowedCareerPath(relativePath)) return null;
   const { content, frontmatter } = await readMetadata(root, relativePath);
-  if (!content) return null;
   const title =
     frontmatter?.title ||
     relativePath.split("/").pop()?.replace(/\.md$/, "") ||
     "未命名";
+
+  // 空占位文件（如待编译的题库方向）：返回占位文档，避免点击 404。
+  if (!content) {
+    return {
+      id: `${CAREER_ID_PREFIX}${relativePath}`,
+      relativePath,
+      title,
+      content: "",
+      body: `> 该文档暂无内容。\n\n「${title}」尚未编译（待生成）。`,
+      frontmatter,
+      headings: [],
+      wikiLinks: [],
+      status: frontmatter?.status || "active",
+      type: frontmatter?.type || "note",
+      updatedAt: frontmatter?.updated || frontmatter?.created || null,
+      layer: "career",
+      kind: "career",
+      contentType: "markdown",
+    };
+  }
+
   const body = content.replace(/^---\s*\n[\s\S]*?\n---\s*(?:\n|$)/, "");
   const wikiLinks = await resolveCareerWikiLinks(
     root,
