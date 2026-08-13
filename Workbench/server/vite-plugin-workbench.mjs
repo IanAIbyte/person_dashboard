@@ -35,6 +35,12 @@ import {
 import { booksPayload } from "./books.mjs";
 import { careerPayload, careerRelativePathFromId, readCareerDocument } from "./career.mjs";
 import {
+  obsidianGraphPayload,
+  obsidianRelativePathFromId,
+  obsidianWikiPayload,
+  readObsidianDocument,
+} from "./obsidian-wiki.mjs";
+import {
   getSocialInsight,
   getSocialTrend,
   listSocialInsights,
@@ -468,6 +474,7 @@ function collectionPayload(index, kind) {
       topic: "主题入口",
       conflict: "争议问题",
       question: "复用问答",
+      entity: "实体",
     };
     const groups = Object.entries(index.wiki.countsByType)
       .sort((left, right) => right[1] - left[1])
@@ -777,6 +784,7 @@ function openLocalDocument(vaultRoot, document, target) {
 export function workbenchApiPlugin({
   vaultRoot = defaultVaultRoot,
   careerVaultRoot = null,
+  obsidianVaultRoot = null,
   readerExplanationService = null,
 } = {}) {
   let readerNoteApiMutationQueue = Promise.resolve();
@@ -819,14 +827,40 @@ export function workbenchApiPlugin({
         wikiLinks: careerDoc.wikiLinks ?? [],
       };
     }
-    const document = documentPayload(await currentIndex(), documentId);
-    if (!document) {
-      const error = new Error("文档不存在。");
-      error.code = "DOCUMENT_NOT_FOUND";
-      throw error;
+      const obsidianPath = obsidianRelativePathFromId(documentId);
+      if (obsidianPath) {
+        const obsidianDoc = await readObsidianDocument(obsidianVaultRoot, obsidianPath);
+        if (!obsidianDoc) {
+          const error = new Error("文档不存在。");
+          error.code = "DOCUMENT_NOT_FOUND";
+          throw error;
+        }
+        const body = obsidianDoc.body ?? readerBodyFromContent(obsidianDoc.content);
+        return {
+          id: obsidianDoc.id,
+          relativePath: obsidianDoc.relativePath,
+          title: obsidianDoc.title,
+          layer: obsidianDoc.layer,
+          kind: obsidianDoc.kind,
+          section: obsidianDoc.section,
+          status: obsidianDoc.status,
+          type: obsidianDoc.type,
+          contentType: obsidianDoc.contentType,
+          updatedAt: obsidianDoc.updatedAt,
+          body,
+          contentHash: typeof body === "string" ? hashReaderDocumentContent(body) : null,
+          headings: obsidianDoc.headings ?? [],
+          wikiLinks: obsidianDoc.wikiLinks ?? [],
+        };
+      }
+      const document = documentPayload(await currentIndex(), documentId);
+      if (!document) {
+        const error = new Error("文档不存在。");
+        error.code = "DOCUMENT_NOT_FOUND";
+        throw error;
+      }
+      return document;
     }
-    return document;
-  }
 
   async function freshIndexedReaderDocument(documentId) {
     const indexed = await indexedReaderDocument(documentId);
@@ -1103,6 +1137,9 @@ export function workbenchApiPlugin({
 
           if (req.method === "GET" && url.pathname.startsWith("/api/collections/")) {
             const kind = decodeURIComponent(url.pathname.slice("/api/collections/".length));
+            if (kind === "wiki" && obsidianVaultRoot) {
+              return json(res, 200, await obsidianWikiPayload(obsidianVaultRoot));
+            }
             return json(res, 200, collectionPayload(await currentIndex(), kind));
           }
 
@@ -1159,6 +1196,36 @@ export function workbenchApiPlugin({
                 contentHash: typeof body === "string" ? hashReaderDocumentContent(body) : null,
                 headings: careerDoc.headings ?? [],
                 wikiLinks: careerDoc.wikiLinks ?? [],
+                outgoingLinks,
+              });
+            }
+            // 知识本体文档（知识星图/Wiki 层）来自外部 Obsidian，带 `obsidian-` 前缀。
+            const obsidianPath = obsidianRelativePathFromId(id);
+            if (obsidianPath) {
+              const obsidianDoc = await readObsidianDocument(obsidianVaultRoot, obsidianPath);
+              if (!obsidianDoc) return json(res, 404, { error: { message: "文档不存在。" } });
+              const body = obsidianDoc.body ?? readerBodyFromContent(obsidianDoc.content);
+              const outgoingLinks = (obsidianDoc.wikiLinks ?? [])
+                .filter((link) => link.resolvedId)
+                .map((link) => ({
+                  id: link.resolvedId,
+                  title: link.label || link.target,
+                }));
+              return json(res, 200, {
+                id: obsidianDoc.id,
+                relativePath: obsidianDoc.relativePath,
+                title: obsidianDoc.title,
+                layer: obsidianDoc.layer,
+                kind: obsidianDoc.kind,
+                section: obsidianDoc.section,
+                status: obsidianDoc.status,
+                type: obsidianDoc.type,
+                contentType: obsidianDoc.contentType,
+                updatedAt: obsidianDoc.updatedAt,
+                body,
+                contentHash: typeof body === "string" ? hashReaderDocumentContent(body) : null,
+                headings: obsidianDoc.headings ?? [],
+                wikiLinks: obsidianDoc.wikiLinks ?? [],
                 outgoingLinks,
               });
             }
@@ -1475,6 +1542,9 @@ export function workbenchApiPlugin({
           }
 
           if (req.method === "GET" && url.pathname === "/api/graph") {
+            if (obsidianVaultRoot) {
+              return json(res, 200, await obsidianGraphPayload(obsidianVaultRoot));
+            }
             return json(res, 200, graphPayload(await currentIndex()));
           }
 
@@ -1611,6 +1681,16 @@ export function workbenchApiPlugin({
               if (!careerDoc) return json(res, 404, { error: { message: "文档不存在。" } });
               // 用 Obsidian 的 vault 根定位实际文件（相对路径在 careerDoc.relativePath）。
               openLocalDocument(careerVaultRoot, { path: careerDoc.relativePath }, body.target);
+              return json(res, 200, { ok: true });
+            }
+            const obsidianPath = obsidianRelativePathFromId(body.id);
+            if (obsidianPath) {
+              if (!obsidianVaultRoot) {
+                return json(res, 404, { error: { message: "文档不存在。" } });
+              }
+              const obsidianDoc = await readObsidianDocument(obsidianVaultRoot, obsidianPath);
+              if (!obsidianDoc) return json(res, 404, { error: { message: "文档不存在。" } });
+              openLocalDocument(obsidianVaultRoot, { path: obsidianDoc.relativePath }, body.target);
               return json(res, 200, { ok: true });
             }
             const current = await currentIndex();

@@ -4,6 +4,8 @@ import { workbenchApiPlugin } from "./server/vite-plugin-workbench.mjs";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
+  const obsidianVaultRoot =
+    env.OBSIDIAN_VAULT_ROOT || env.CAREER_VAULT_ROOT || null;
   return {
     cacheDir: process.env.VITE_CACHE_DIR || "node_modules/.vite",
     build: {
@@ -24,7 +26,10 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       react(),
-      workbenchApiPlugin({ careerVaultRoot: env.CAREER_VAULT_ROOT || null }),
+      workbenchApiPlugin({
+        careerVaultRoot: env.CAREER_VAULT_ROOT || null,
+        obsidianVaultRoot,
+      }),
     ],
   };
 });
