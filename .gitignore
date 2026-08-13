@@ -31,7 +31,3 @@ secrets.*.json
 Workbench/config/attention.local.json
 个人知识库/10_raw/my-thoughts/reading-notes/*
 !个人知识库/10_raw/my-thoughts/reading-notes/.gitkeep
-
-# 求职备战内容含真实个人信息（姓名/薪资/前司项目），仅本地使用，严禁提交。
-个人知识库/60_career/*
-!个人知识库/60_career/.gitkeep

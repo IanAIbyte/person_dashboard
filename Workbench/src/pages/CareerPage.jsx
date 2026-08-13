@@ -9,20 +9,8 @@ import {
 } from "@tabler/icons-react";
 
 import { PageHeader } from "../components/PageHeader";
-import { MetricStat } from "../components/MetricStat";
 import { loadCareer } from "../lib/api";
 import "../components/career/career.css";
-
-const STATUS_LABEL = {
-  ok: "已具备",
-  warn: "需补强",
-  missing: "缺失",
-  unknown: "—",
-};
-// 缺失 / 需补强置顶，已具备沉底。
-const STATUS_RANK = { missing: 0, warn: 1, unknown: 2, ok: 3 };
-const PRIORITY_RANK = { high: 0, "mid-high": 1, mid: 2, none: 3, unknown: 4 };
-const PRIORITY_LABEL = { high: "高", "mid-high": "中高", mid: "中", none: "—" };
 
 function formatUpdated(value) {
   if (!value) return "—";
@@ -30,69 +18,20 @@ function formatUpdated(value) {
   return text.length >= 10 ? text.slice(0, 10) : text;
 }
 
-// 匹配度高/中高/中 → 用于卡片左侧色条与匹配度文字上色。
-function matchTone(match) {
-  if (!match) return "unknown";
-  if (match.startsWith("高")) return "high";
-  if (match.includes("中高")) return "mid-high";
-  if (match.startsWith("中")) return "mid";
-  return "unknown";
-}
-
-function RoleCard({ role }) {
-  const tone = matchTone(role.match);
-  return (
-    <article className={`career-role-card career-role-card--${tone}`}>
-      <div className="career-role-card__head">
-        <span className="career-role-card__id">{role.id || "—"}</span>
-        <span className={`career-role-card__match career-role-card__match--${tone}`}>
-          {role.match || "—"}
-        </span>
-      </div>
-      <h3 className="career-role-card__title">{role.title || "未命名岗位"}</h3>
-      {role.company ? <div className="career-role-card__company">{role.company}</div> : null}
-      <dl className="career-role-card__facts">
-        <div>
-          <dt>薪资</dt>
-          <dd>{role.salary || "未公开"}</dd>
-        </div>
-        <div>
-          <dt>地点</dt>
-          <dd>{role.location || "—"}</dd>
-        </div>
-      </dl>
-      {role.requirements ? (
-        <p className="career-role-card__requirements">{role.requirements}</p>
-      ) : null}
-      {role.source ? <div className="career-role-card__source">{role.source}</div> : null}
-    </article>
-  );
-}
-
-function MatrixRow({ row }) {
-  return (
-    <tr className={`career-matrix__row career-matrix__row--${row.statusLevel}`}>
-      <td className="career-matrix__skill">{row.skill || "—"}</td>
-      <td>
-        <span className={`career-status career-status--${row.statusLevel}`}>
-          {row.status || STATUS_LABEL[row.statusLevel]}
-        </span>
-      </td>
-      <td className="career-matrix__roles">{row.roles || "—"}</td>
-      <td className="career-matrix__question">{row.question || "—"}</td>
-      <td>
-        <span className={`career-priority career-priority--${row.priorityLevel}`}>
-          {row.priority || PRIORITY_LABEL[row.priorityLevel]}
-        </span>
-      </td>
-    </tr>
-  );
+function groupByDirection(items) {
+  const map = new Map();
+  for (const item of items) {
+    const key = item.direction || "未分类";
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(item);
+  }
+  return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
 }
 
 export function CareerPage({ onOpenDocument, syncRevision = 0 }) {
   const reduceMotion = useReducedMotion();
   const [result, setResult] = useState({ data: null, source: "loading", error: null });
-  const [activeTab, setActiveTab] = useState("A");
+  const [openRawGroups, setOpenRawGroups] = useState(() => new Set());
 
   const refresh = useCallback(async () => {
     setResult((current) => ({
@@ -132,41 +71,61 @@ export function CareerPage({ onOpenDocument, syncRevision = 0 }) {
   }
 
   const report = data?.report ?? null;
-  const banks = data?.banks ?? [];
-  const roles =
-    data?.roles ?? { A: { label: "方向 A", count: 0, items: [] }, B: { label: "方向 B", count: 0, items: [] } };
-  const matrixRaw = data?.matrix ?? [];
+  const campaign = data?.campaign ?? null;
+  const curated = data?.questionBanks?.curated ?? [];
+  const raw = data?.questionBanks?.raw ?? [];
+  const concepts = data?.concepts ?? [];
+  const coverage = data?.coverage ?? { roles: false, matrix: false };
+  const hints = data?.placeholderHints ?? { roles: "", matrix: "" };
 
-  const totalQuestions = banks.reduce((sum, bank) => sum + (bank.questionCount || 0), 0);
-  const roleTotal = (roles.A?.count ?? 0) + (roles.B?.count ?? 0);
-  const gapCount = matrixRaw.filter(
-    (row) => row.statusLevel === "warn" || row.statusLevel === "missing",
-  ).length;
-  const matrixSorted = [...matrixRaw].sort(
-    (a, b) =>
-      (STATUS_RANK[a.statusLevel] ?? 9) - (STATUS_RANK[b.statusLevel] ?? 9) ||
-      (PRIORITY_RANK[a.priorityLevel] ?? 9) - (PRIORITY_RANK[b.priorityLevel] ?? 9),
+  const rawGroups = groupByDirection(raw);
+  const conceptGroups = groupByDirection(concepts);
+  const curatedCount = curated.filter((b) => b.kind !== "ledger").length;
+  const ledgerCount = curated.filter((b) => b.kind === "ledger").length;
+  const directionCount = new Set([...raw, ...concepts].map((i) => i.direction)).size;
+
+  const toggleRawGroup = (key) => {
+    setOpenRawGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const headerAside = (
+    <div className="career-summary">
+      <div>
+        <strong>{curatedCount || "—"}</strong>
+        <span>自编题库</span>
+      </div>
+      <div>
+        <strong>{raw.length || "—"}</strong>
+        <span>面试鸭原题</span>
+      </div>
+      <div>
+        <strong>{concepts.length || "—"}</strong>
+        <span>概念</span>
+      </div>
+      <div>
+        <strong>{directionCount || "—"}</strong>
+        <span>覆盖方向</span>
+      </div>
+    </div>
   );
-  const activeRoles = roles[activeTab] ?? { items: [] };
 
   return (
     <div className="page page--career">
       <PageHeader
-        eyebrow="CAREER · LOCAL"
+        eyebrow="CAREER · OBSIDIAN"
         title="求职备战"
-        description="岗位机会、技能差距矩阵与面试题库的本地备战面板。数据仅本地可见，不随公开版发布。"
+        description="岗位机会、技能差距与面试题库的本地备战面板，只读来自 Obsidian 知识库的内容。"
+        aside={headerAside}
       />
-
-      <div className="metric-strip">
-        <MetricStat label="题库" value={banks.length} accent />
-        <MetricStat label="总题量" value={totalQuestions} />
-        <MetricStat label="在招岗位" value={roleTotal} />
-        <MetricStat label="待补强技能" value={gapCount} />
-      </div>
 
       <div className="career-toolbar">
         <span className="career-source">
-          {source === "live" ? "已连接本地 Vault" : source === "fallback" ? "降级模式" : "—"}
+          {source === "live" ? "已连接 Obsidian 知识库" : source === "fallback" ? "未配置数据源" : "—"}
         </span>
         <button type="button" className="career-refresh" onClick={refresh}>
           <IconRefresh size={16} stroke={1.7} />
@@ -174,145 +133,208 @@ export function CareerPage({ onOpenDocument, syncRevision = 0 }) {
         </button>
       </div>
 
-      {error && source === "fallback" && !report ? (
+      {error && source === "fallback" && !data?.available ? (
         <div className="career-empty career-empty--error">
           <IconAlertTriangle size={20} stroke={1.7} />
-          <p>无法加载求职备战数据。{error?.message ? `（${error.message}）` : ""}</p>
+          <p>
+            无法加载求职备战数据。请确认已在 Workbench/.env 配置 CAREER_VAULT_ROOT。
+            {error?.message ? `（${error.message}）` : ""}
+          </p>
         </div>
       ) : null}
 
-      {report ? (
-        <motion.section className="career-panel career-report" {...enter}>
-          <div className="career-report__main">
-            <span className="career-report__eyebrow">策略主报告</span>
-            <h2 className="career-report__title">{report.title || "求职策略主报告"}</h2>
-            <div className="career-report__meta">
-              <span>
-                <IconBriefcase size={14} stroke={1.7} /> {report.direction || "求职策略"}
-              </span>
-              <span>更新 {formatUpdated(report.updated)}</span>
-            </div>
+      {/* 主报告区：MOC + 战役页 */}
+      {(report || campaign) && (
+        <motion.section className="career-panel" {...enter}>
+          <header className="career-section__head">
+            <h2>主报告</h2>
+            <p>求职备战的知识入口与战役页。</p>
+          </header>
+          <div className="career-report-grid">
+            {report && (
+              <button
+                type="button"
+                className="career-report-card"
+                onClick={() => onOpenDocument?.(report.id)}
+              >
+                <div className="career-report-card__head">
+                  <IconBriefcase size={18} stroke={1.7} />
+                  <span className="career-report-card__eyebrow">知识地图 · MOC</span>
+                </div>
+                <div className="career-report-card__title">{report.title}</div>
+                <div className="career-report-card__meta">更新 {formatUpdated(report.updated)}</div>
+              </button>
+            )}
+            {campaign && (
+              <button
+                type="button"
+                className="career-report-card"
+                onClick={() => onOpenDocument?.(campaign.id)}
+              >
+                <div className="career-report-card__head">
+                  <IconFileText size={18} stroke={1.7} />
+                  <span className="career-report-card__eyebrow">战役页</span>
+                </div>
+                <div className="career-report-card__title">{campaign.title}</div>
+                <div className="career-report-card__meta">更新 {formatUpdated(campaign.updated)}</div>
+              </button>
+            )}
           </div>
-          <button
-            type="button"
-            className="career-report__action"
-            onClick={() => onOpenDocument?.(report.id)}
-          >
-            <IconFileText size={16} stroke={1.7} />
-            阅读完整报告
-          </button>
         </motion.section>
-      ) : null}
+      )}
 
+      {/* 面试题库区（主力） */}
       <motion.section
         className="career-panel"
         {...enter}
         transition={{ ...enter.transition, delay: 0.05 }}
       >
         <header className="career-section__head">
-          <h2>岗位机会</h2>
-          <p>主报告梳理的在招岗位，按方向分组。</p>
+          <h2>面试题库</h2>
+          <p>自编答案库与面试鸭原文题库，点击在阅读器中打开。</p>
         </header>
-        <div className="career-tabs">
-          {["A", "B"].map((key) => {
-            const group = roles[key] ?? { items: [], count: 0 };
-            const label =
-              group.label || (key === "A" ? "方向 A · 匹配岗位" : "方向 B · AI 方向");
-            return (
-              <button
-                key={key}
-                type="button"
-                className={`career-tabs__tab${activeTab === key ? " career-tabs__tab--active" : ""}`}
-                onClick={() => setActiveTab(key)}
-              >
-                {label}（{group.count ?? group.items.length}）
-              </button>
-            );
-          })}
-        </div>
-        {activeRoles.items?.length ? (
-          <div className="career-roles">
-            {activeRoles.items.map((role) => (
-              <RoleCard key={role.id || role.title} role={role} />
-            ))}
+
+        {curated.length > 0 && (
+          <div className="career-subsection">
+            <h3 className="career-subsection__title">自编答案库</h3>
+            <div className="career-banks">
+              {curated.map((bank) => (
+                <button
+                  key={bank.id}
+                  type="button"
+                  className="career-bank-card"
+                  onClick={() => onOpenDocument?.(bank.id)}
+                >
+                  <div className="career-bank-card__head">
+                    <IconBook2 size={18} stroke={1.7} />
+                    <span className="career-bank-card__direction">{bank.direction}</span>
+                  </div>
+                  <div className="career-bank-card__title">{bank.title}</div>
+                  <div className="career-bank-card__meta">
+                    <span>
+                      {bank.kind === "ledger"
+                        ? "来源台账"
+                        : bank.questionCount != null
+                          ? `${bank.questionCount} 题`
+                          : "题量未知"}
+                    </span>
+                    <span>更新 {formatUpdated(bank.updated)}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
-        ) : (
+        )}
+
+        {raw.length > 0 && (
+          <div className="career-subsection">
+            <h3 className="career-subsection__title">面试鸭原文（{raw.length}）</h3>
+            <div className="career-raw-groups">
+              {rawGroups.map(([direction, items]) => {
+                const isOpen = openRawGroups.has(direction);
+                return (
+                  <div key={direction} className="career-raw-group">
+                    <button
+                      type="button"
+                      className="career-raw-group__toggle"
+                      onClick={() => toggleRawGroup(direction)}
+                    >
+                      <span>{direction}</span>
+                      <span className="career-raw-group__count">{items.length}</span>
+                    </button>
+                    {isOpen && (
+                      <div className="career-raw-group__list">
+                        {items.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className="career-raw-item"
+                            onClick={() => onOpenDocument?.(item.id)}
+                          >
+                            <span className="career-raw-item__title">{item.title}</span>
+                            <span className="career-raw-item__date">
+                              {formatUpdated(item.updated)}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {curated.length === 0 && raw.length === 0 && (
           <div className="career-empty">
-            <p>该方向暂无岗位数据。</p>
+            <p>暂无题库数据。</p>
           </div>
         )}
       </motion.section>
 
+      {/* 知识概念区（新区） */}
       <motion.section
         className="career-panel"
         {...enter}
         transition={{ ...enter.transition, delay: 0.1 }}
       >
         <header className="career-section__head">
-          <h2>技能差距矩阵</h2>
-          <p>按面试考察频率排序；缺失与需补强项置顶，便于优先补齐。</p>
+          <h2>知识概念</h2>
+          <p>已编译的概念笔记，按方向分组。</p>
         </header>
-        {matrixSorted.length ? (
-          <div className="career-matrix-scroll">
-            <table className="career-matrix">
-              <thead>
-                <tr>
-                  <th>技能项</th>
-                  <th>状态</th>
-                  <th>出现岗位</th>
-                  <th>面试典型问法</th>
-                  <th>学习优先级</th>
-                </tr>
-              </thead>
-              <tbody>
-                {matrixSorted.map((row) => (
-                  <MatrixRow key={row.skill} row={row} />
-                ))}
-              </tbody>
-            </table>
+        {concepts.length > 0 ? (
+          <div className="career-concepts">
+            {conceptGroups.map(([direction, items]) => (
+              <div key={direction} className="career-concept-group">
+                <h3 className="career-subsection__title">
+                  {direction} <span className="career-raw-group__count">{items.length}</span>
+                </h3>
+                <div className="career-concept-grid">
+                  {items.map((concept) => (
+                    <button
+                      key={concept.id}
+                      type="button"
+                      className="career-concept-card"
+                      onClick={() => onOpenDocument?.(concept.id)}
+                    >
+                      <div className="career-concept-card__title">{concept.title}</div>
+                      {concept.excerpt && (
+                        <div className="career-concept-card__excerpt">{concept.excerpt}</div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
           <div className="career-empty">
-            <p>暂无技能差距数据。</p>
+            <p>暂无概念笔记。</p>
           </div>
         )}
       </motion.section>
 
+      {/* 岗位机会 / 技能差距 —— 占位（Obsidian 暂无数据） */}
       <motion.section
         className="career-panel"
         {...enter}
         transition={{ ...enter.transition, delay: 0.15 }}
       >
         <header className="career-section__head">
-          <h2>面试题库</h2>
-          <p>点击卡片在阅读器中打开题库原文。</p>
+          <h2>岗位机会 · 技能差距</h2>
+          <p>这两区依赖岗位扫描与差距分析的产出，目前知识库尚未生成。</p>
         </header>
-        {banks.length ? (
-          <div className="career-banks">
-            {banks.map((bank) => (
-              <button
-                key={bank.id}
-                type="button"
-                className="career-bank-card"
-                onClick={() => onOpenDocument?.(bank.id)}
-              >
-                <div className="career-bank-card__head">
-                  <IconBook2 size={18} stroke={1.7} />
-                  <span className="career-bank-card__direction">{bank.direction || "题库"}</span>
-                </div>
-                <div className="career-bank-card__title">{bank.title || "面试题库"}</div>
-                <div className="career-bank-card__meta">
-                  <span>{bank.questionCount != null ? `${bank.questionCount} 题` : "题量未知"}</span>
-                  <span>更新 {formatUpdated(bank.updated)}</span>
-                </div>
-              </button>
-            ))}
+        <div className="career-placeholder-grid">
+          <div className="career-placeholder">
+            <span className="career-placeholder__tag">岗位机会</span>
+            <p>{coverage.roles ? "已生成" : hints.roles}</p>
           </div>
-        ) : (
-          <div className="career-empty">
-            <p>暂无题库数据。</p>
+          <div className="career-placeholder">
+            <span className="career-placeholder__tag">技能差距矩阵</span>
+            <p>{coverage.matrix ? "已生成" : hints.matrix}</p>
           </div>
-        )}
+        </div>
       </motion.section>
     </div>
   );

@@ -423,12 +423,14 @@ export function loadCareer() {
       available: false,
       generatedAt: null,
       report: null,
-      banks: [],
-      roles: {
-        A: { label: "方向 A", count: 0, items: [] },
-        B: { label: "方向 B", count: 0, items: [] },
+      campaign: null,
+      questionBanks: { curated: [], raw: [] },
+      concepts: [],
+      coverage: { roles: false, matrix: false },
+      placeholderHints: {
+        roles: "待运行岗位扫描",
+        matrix: "待运行技能差距分析",
       },
-      matrix: [],
     },
   );
 }

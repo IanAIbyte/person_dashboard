@@ -33,7 +33,7 @@ import {
   materialsHomePayload,
 } from "./materials.mjs";
 import { booksPayload } from "./books.mjs";
-import { careerPayload } from "./career.mjs";
+import { careerPayload, readCareerDocument } from "./career.mjs";
 import {
   getSocialInsight,
   getSocialTrend,
@@ -776,6 +776,7 @@ function openLocalDocument(vaultRoot, document, target) {
 
 export function workbenchApiPlugin({
   vaultRoot = defaultVaultRoot,
+  careerVaultRoot = null,
   readerExplanationService = null,
 } = {}) {
   let readerNoteApiMutationQueue = Promise.resolve();
@@ -1105,6 +1106,29 @@ export function workbenchApiPlugin({
 
           if (req.method === "GET" && url.pathname.startsWith("/api/documents/")) {
             const id = decodeURIComponent(url.pathname.slice("/api/documents/".length));
+            // 求职备战文档来自外部 Obsidian，带 `career:` 前缀时走独立读取器。
+            if (id.startsWith("career:")) {
+              const relativePath = id.slice("career:".length);
+              const careerDoc = await readCareerDocument(careerVaultRoot, relativePath);
+              if (!careerDoc) return json(res, 404, { error: { message: "文档不存在。" } });
+              const body = readerBodyFromContent(careerDoc.content);
+              return json(res, 200, {
+                id: careerDoc.id,
+                relativePath: careerDoc.relativePath,
+                title: careerDoc.title,
+                layer: careerDoc.layer,
+                kind: careerDoc.kind,
+                section: null,
+                status: careerDoc.status,
+                type: careerDoc.type,
+                contentType: careerDoc.contentType,
+                updatedAt: careerDoc.updatedAt,
+                body,
+                contentHash: typeof body === "string" ? hashReaderDocumentContent(body) : null,
+                headings: [],
+                outgoingLinks: [],
+              });
+            }
             const document = documentPayload(await currentIndex(), id);
             if (!document) return json(res, 404, { error: { message: "文档不存在。" } });
             return json(res, 200, document);
@@ -1451,7 +1475,7 @@ export function workbenchApiPlugin({
           }
 
           if (req.method === "GET" && url.pathname === "/api/career") {
-            return json(res, 200, careerPayload(await currentIndex()));
+            return json(res, 200, await careerPayload(careerVaultRoot));
           }
 
           if (req.method === "GET" && url.pathname === "/api/social-trends") {
