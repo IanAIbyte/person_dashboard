@@ -435,6 +435,34 @@ export function loadCareer() {
   );
 }
 
+export function loadStockUniverse() {
+  return withFallback(
+    () => request("/api/stock-universe"),
+    { generatedAt: null, total: 0, chains: [] },
+  );
+}
+
+export function loadStockWatchlist() {
+  return withFallback(
+    () => request("/api/stock-watchlist"),
+    { updatedAt: null, total: 0, items: [] },
+  );
+}
+
+export function followStock(name) {
+  return request("/api/stock-watchlist", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function unfollowStock(name) {
+  return request(`/api/stock-watchlist/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+    body: JSON.stringify({}),
+  });
+}
+
 export function loadSocialInsight(reportId) {
   return withFallback(
     () => request(`/api/social-insights/${encodeURIComponent(reportId)}`),

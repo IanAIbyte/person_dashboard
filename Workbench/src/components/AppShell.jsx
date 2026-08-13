@@ -5,6 +5,7 @@ import {
   IconBooks,
   IconBriefcase,
   IconBulb,
+  IconChartCandle,
   IconClipboardList,
   IconCommand,
   IconHome,
@@ -33,6 +34,9 @@ const primaryNavigation = [
     : []),
   ...(localWorkbench
     ? [{ to: "/career", label: "求职备战", icon: IconBriefcase }]
+    : []),
+  ...(localWorkbench
+    ? [{ to: "/stocks", label: "重点个股", icon: IconChartCandle }]
     : []),
   { to: "/topics", label: "灵感库", icon: IconBulb },
   { to: "/content", label: "内容中心", icon: IconClipboardList },

@@ -14,6 +14,7 @@ import { SystemPage } from "./pages/SystemPage";
 import { TopicsPage } from "./pages/TopicsPage";
 import { SocialInsightsPage, SocialTrendDetailPage } from "./pages/SocialInsightsPage";
 import { CareerPage } from "./pages/CareerPage";
+import { StockWatchlistPage } from "./pages/StockWatchlistPage";
 import { useVaultSync } from "./hooks/useVaultSync";
 
 const localWorkbench = import.meta.env.VITE_WORKBENCH_HOSTED !== "true";
@@ -133,6 +134,17 @@ export function App() {
               path="/career"
               element={
                 <CareerPage
+                  onOpenDocument={openDocument}
+                  syncRevision={vaultSync.revision}
+                />
+              }
+            />
+          ) : null}
+          {localWorkbench ? (
+            <Route
+              path="/stocks"
+              element={
+                <StockWatchlistPage
                   onOpenDocument={openDocument}
                   syncRevision={vaultSync.revision}
                 />

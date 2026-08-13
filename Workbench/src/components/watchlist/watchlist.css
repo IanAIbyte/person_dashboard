@@ -1,0 +1,325 @@
+/* 重点个股页面样式 —— 全部复用 :root 变量，块名前缀 watchlist-。 */
+
+.page--watchlist {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* 页眉右侧计数（紧凑横排，与 career-summary 一致） */
+.watchlist-summary {
+  display: flex;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--line);
+}
+
+.watchlist-summary > div {
+  min-width: 96px;
+  display: grid;
+  gap: 5px;
+  padding: 13px 16px;
+  background: var(--surface);
+  text-align: right;
+}
+
+.watchlist-summary strong {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.watchlist-summary span {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.watchlist-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.watchlist-source {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-faint);
+  letter-spacing: 0.02em;
+}
+
+.watchlist-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.watchlist-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  user-select: none;
+}
+
+.watchlist-filter input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.watchlist-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink-soft);
+  border-radius: var(--r-pill);
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.2s var(--ease), color 0.2s var(--ease);
+}
+
+.watchlist-refresh:hover {
+  border-color: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+/* 链分区卡片 */
+.watchlist-chain {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+.watchlist-chain__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.watchlist-chain__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent-strong);
+}
+
+.watchlist-chain__title h2 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+
+.watchlist-chain__meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.watchlist-chain__count {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent-strong);
+  background: var(--accent-wash);
+  border-radius: var(--r-pill);
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+/* 细分环节分组 */
+.watchlist-segment {
+  margin-top: 16px;
+}
+
+.watchlist-segment:first-of-type {
+  margin-top: 0;
+}
+
+.watchlist-segment__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  margin: 0 0 10px;
+}
+
+.watchlist-segment__count {
+  color: var(--ink-faint);
+  font-weight: 400;
+}
+
+.watchlist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+/* 个股卡片 */
+.watchlist-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: var(--r-md);
+  padding: 16px;
+  transition: transform 0.2s var(--ease), border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+}
+
+.watchlist-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-soft);
+  box-shadow: var(--shadow-accent);
+}
+
+.watchlist-card--followed {
+  border-color: var(--accent-soft);
+  background: var(--accent-wash);
+}
+
+.watchlist-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.watchlist-card__name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.watchlist-card__code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.watchlist-card__star {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--r-sm);
+  transition: color 0.2s var(--ease);
+}
+
+.watchlist-card--followed .watchlist-card__star {
+  color: var(--accent);
+}
+
+.watchlist-card__star:hover {
+  color: var(--accent-strong);
+}
+
+.watchlist-card__note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  line-height: 1.55;
+  flex: 1;
+}
+
+.watchlist-card__foot {
+  border-top: 1px dashed var(--line);
+  padding-top: 8px;
+}
+
+.watchlist-card__detail {
+  border: none;
+  background: transparent;
+  color: var(--accent-strong);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+}
+
+.watchlist-card__detail:hover {
+  text-decoration: underline;
+}
+
+.watchlist-card__pending {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+/* 空态 / 加载 / 错误 */
+.watchlist-empty {
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-md);
+  padding: 28px;
+  text-align: center;
+  color: var(--ink-faint);
+  font-size: 13px;
+}
+
+.watchlist-empty--error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--danger);
+  border-color: var(--danger);
+  background: rgba(220, 38, 38, 0.04);
+}
+
+.watchlist-loading {
+  padding-top: 8px;
+}
+
+.watchlist-loading .skeleton {
+  border-radius: var(--r-md);
+}
+
+@media (max-width: 640px) {
+  .watchlist-summary {
+    flex-wrap: wrap;
+  }
+
+  .watchlist-summary > div {
+    min-width: 0;
+    flex: 1 1 45%;
+  }
+
+  .watchlist-chain__head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .watchlist-refresh,
+  .watchlist-card {
+    transition: none;
+  }
+}

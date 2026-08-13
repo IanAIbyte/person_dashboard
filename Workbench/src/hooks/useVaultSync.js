@@ -9,6 +9,7 @@ function scopeForPath(pathname) {
   if (pathname.startsWith("/content")) return "content";
   if (pathname.startsWith("/douyin")) return "douyin";
   if (pathname.startsWith("/social-insights")) return "social_insights";
+  if (pathname.startsWith("/stocks")) return "stocks";
   if (pathname.startsWith("/system")) return "runtime";
   return "overview";
 }

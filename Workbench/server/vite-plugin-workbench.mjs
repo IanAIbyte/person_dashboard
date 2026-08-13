@@ -27,6 +27,11 @@ import {
   MATERIAL_READING_STATE_PATH,
   createMaterialReadingStateRepository,
 } from "./material-reading-state.mjs";
+import { stockUniversePayload } from "./stock-universe.mjs";
+import {
+  STOCK_WATCHLIST_PATH,
+  createStockWatchlistRepository,
+} from "./stock-watchlist.mjs";
 import {
   materialFolderPayload,
   materialReadingQueuePayload,
@@ -790,6 +795,7 @@ export function workbenchApiPlugin({
   let readerNoteApiMutationQueue = Promise.resolve();
   const readerNotes = createReaderNotesRepository({ vaultRoot });
   const materialReadingState = createMaterialReadingStateRepository({ vaultRoot });
+  const stockWatchlist = createStockWatchlistRepository({ vaultRoot });
   const wikiIngest = createWikiIngestRunner({ vaultRoot });
   const readerExplanations = readerExplanationService ??
     createReaderExplanationsService({ vaultRoot });
@@ -1579,6 +1585,41 @@ export function workbenchApiPlugin({
 
           if (req.method === "GET" && url.pathname === "/api/career") {
             return json(res, 200, await careerPayload(careerVaultRoot));
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/stock-universe") {
+            return json(res, 200, stockUniversePayload());
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/stock-watchlist") {
+            const watchlist = await stockWatchlist.list();
+            return json(res, 200, {
+              updatedAt: watchlist.updatedAt,
+              total: watchlist.items.length,
+              items: watchlist.items.map((item) => item.name),
+            });
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/stock-watchlist") {
+            const body = await readJson(req, 16 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["name"]),
+              "INVALID_STOCK_WATCHLIST_REQUEST",
+            );
+            const item = await stockWatchlist.add(body.name);
+            vaultSync.notifyPaths([STOCK_WATCHLIST_PATH]);
+            return json(res, 200, item);
+          }
+
+          const stockWatchlistMatch = url.pathname.match(
+            /^\/api\/stock-watchlist\/([^/]+)$/,
+          );
+          if (req.method === "DELETE" && stockWatchlistMatch) {
+            const name = decodeURIComponent(stockWatchlistMatch[1]);
+            const removed = await stockWatchlist.remove(name);
+            if (removed) vaultSync.notifyPaths([STOCK_WATCHLIST_PATH]);
+            return json(res, 200, { removed });
           }
 
           if (req.method === "GET" && url.pathname === "/api/social-trends") {
