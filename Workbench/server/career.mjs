@@ -116,8 +116,107 @@ async function statOptional(root, relativePath) {
   return stat(path.join(root, relativePath)).catch(() => null);
 }
 
+// 解析正文中的 Obsidian 双链 [[target|label#heading]]，字段结构与主 vault 的
+// parseWikiLinks 对齐（target/label/heading/embedded/resolvedId）。
+function parseWikiLinks(body) {
+  const links = [];
+  const pattern = /(!?)\[\[([^\]]+)\]\]/g;
+  let match;
+
+  while ((match = pattern.exec(body)) !== null) {
+    const raw = match[2].trim();
+    const pipeIndex = raw.indexOf("|");
+    const targetWithAnchor = pipeIndex >= 0 ? raw.slice(0, pipeIndex).trim() : raw;
+    const label = pipeIndex >= 0 ? raw.slice(pipeIndex + 1).trim() : null;
+    const [target, heading = null] = targetWithAnchor.split("#", 2);
+    if (!target.trim()) continue;
+
+    links.push({
+      target: target.trim(),
+      label: label || null,
+      heading: heading || null,
+      embedded: match[1] === "!",
+      resolvedId: null,
+    });
+  }
+
+  return links;
+}
+
+function parseHeadings(body) {
+  const headings = [];
+  for (const line of String(body || "").split("\n")) {
+    const match = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
+    if (!match) continue;
+    headings.push({ level: match[1].length, title: match[2].trim() });
+  }
+  return headings;
+}
+
+// 建立白名单内所有文件的 basename → 相对路径 + 大小 索引，用于双链按短名解析。
+async function buildCareerLinkIndex(root) {
+  const files = new Set([...EXACT_FILES]);
+  for (const rel of await listMdFiles(root, RAW_QUESTION_DIR)) files.add(rel);
+  for (const rel of await listMdFiles(root, CONCEPT_DIR)) files.add(rel);
+
+  const rels = [...files];
+  const stats = await Promise.all(rels.map((rel) => statOptional(root, rel)));
+  const basenames = new Map();
+
+  rels.forEach((rel, index) => {
+    const base = rel.split("/").pop()?.replace(/\.md$/, "") || "";
+    if (!base) return;
+    const size = stats[index]?.size ?? 0;
+    if (!basenames.has(base)) basenames.set(base, []);
+    basenames.get(base).push({ relativePath: rel, size });
+  });
+
+  return basenames;
+}
+
+// 把白名单内的双链目标解析为 career: 前缀的 resolvedId。
+// 优先级：相对当前文档目录的精确路径 → 根相对精确路径 → basename 唯一匹配；
+// 空文件（0 字节占位）一律跳过。
+async function resolveCareerWikiLinks(root, relativePath, wikiLinks, index) {
+  const sourceDirectory = path.posix.dirname(relativePath);
+
+  for (const link of wikiLinks) {
+    const rawTarget = link.target
+      .replace(/^\/+/, "")
+      .replace(/\\/g, "/")
+      .replace(/\.md$/i, "");
+    const candidates = [
+      path.posix.normalize(path.posix.join(sourceDirectory, rawTarget)),
+      path.posix.normalize(rawTarget),
+    ];
+
+    let resolved = null;
+    for (const candidate of candidates) {
+      const exact = isAllowedCareerPath(`${candidate}.md`) ? `${candidate}.md`
+        : isAllowedCareerPath(candidate) ? candidate
+          : null;
+      if (!exact) continue;
+      const info = await statOptional(root, exact);
+      if (info && info.size > 0) {
+        resolved = exact;
+        break;
+      }
+    }
+
+    if (!resolved && !rawTarget.includes("/")) {
+      const matches = (index.get(rawTarget) || []).filter((item) => item.size > 0);
+      if (matches.length === 1) resolved = matches[0].relativePath;
+    }
+
+    if (resolved) link.resolvedId = `${CAREER_ID_PREFIX}${resolved}`;
+  }
+
+  return wikiLinks;
+}
+
 // 单文档读取，供 /api/documents/:id 的 career fallback 使用。
-// 返回原始内容 + frontmatter，由调用方构造成 DocumentDrawer 兼容 shape。
+// 返回原始内容 + frontmatter + 解析后的 headings/wikiLinks，由调用方构造成
+// DocumentDrawer 兼容 shape。
 export async function readCareerDocument(root, relativePath) {
   if (!root || !isAllowedCareerPath(relativePath)) return null;
   const { content, frontmatter } = await readMetadata(root, relativePath);
@@ -126,12 +225,22 @@ export async function readCareerDocument(root, relativePath) {
     frontmatter?.title ||
     relativePath.split("/").pop()?.replace(/\.md$/, "") ||
     "未命名";
+  const body = content.replace(/^---\s*\n[\s\S]*?\n---\s*(?:\n|$)/, "");
+  const wikiLinks = await resolveCareerWikiLinks(
+    root,
+    relativePath,
+    parseWikiLinks(body),
+    await buildCareerLinkIndex(root),
+  );
   return {
     id: `${CAREER_ID_PREFIX}${relativePath}`,
     relativePath,
     title,
     content,
+    body,
     frontmatter,
+    headings: parseHeadings(body),
+    wikiLinks,
     status: frontmatter?.status || "active",
     type: frontmatter?.type || "note",
     updatedAt: frontmatter?.updated || frontmatter?.created || null,

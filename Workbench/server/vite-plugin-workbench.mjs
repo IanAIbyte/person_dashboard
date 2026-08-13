@@ -1111,7 +1111,13 @@ export function workbenchApiPlugin({
               const relativePath = id.slice("career:".length);
               const careerDoc = await readCareerDocument(careerVaultRoot, relativePath);
               if (!careerDoc) return json(res, 404, { error: { message: "文档不存在。" } });
-              const body = readerBodyFromContent(careerDoc.content);
+              const body = careerDoc.body ?? readerBodyFromContent(careerDoc.content);
+              const outgoingLinks = (careerDoc.wikiLinks ?? [])
+                .filter((link) => link.resolvedId)
+                .map((link) => ({
+                  id: link.resolvedId,
+                  title: link.label || link.target,
+                }));
               return json(res, 200, {
                 id: careerDoc.id,
                 relativePath: careerDoc.relativePath,
@@ -1125,8 +1131,9 @@ export function workbenchApiPlugin({
                 updatedAt: careerDoc.updatedAt,
                 body,
                 contentHash: typeof body === "string" ? hashReaderDocumentContent(body) : null,
-                headings: [],
-                outgoingLinks: [],
+                headings: careerDoc.headings ?? [],
+                wikiLinks: careerDoc.wikiLinks ?? [],
+                outgoingLinks,
               });
             }
             const document = documentPayload(await currentIndex(), id);
