@@ -29,6 +29,8 @@ export default defineConfig(({ mode }) => {
       workbenchApiPlugin({
         careerVaultRoot: env.CAREER_VAULT_ROOT || null,
         obsidianVaultRoot,
+        zhipuApiKey: env.ZHIPU_API_KEY || null,
+        zhipuBaseUrl: env.ZHIPU_BASE_URL || null,
       }),
     ],
   };

@@ -29,9 +29,17 @@ import {
 } from "./material-reading-state.mjs";
 import { stockUniversePayload } from "./stock-universe.mjs";
 import {
+  STOCK_CODES_PATH,
+  createStockCodesRepository,
+} from "./stock-codes.mjs";
+import {
   STOCK_WATCHLIST_PATH,
   createStockWatchlistRepository,
 } from "./stock-watchlist.mjs";
+import { createLlmClient } from "./llm-client.mjs";
+import { createMarketDataService } from "./market-data.mjs";
+import { createStockNewsService } from "./stock-news.mjs";
+import { createStockAnalysisService } from "./stock-analysis.mjs";
 import {
   materialFolderPayload,
   materialReadingQueuePayload,
@@ -790,12 +798,26 @@ export function workbenchApiPlugin({
   vaultRoot = defaultVaultRoot,
   careerVaultRoot = null,
   obsidianVaultRoot = null,
+  zhipuApiKey = null,
+  zhipuBaseUrl = null,
   readerExplanationService = null,
 } = {}) {
   let readerNoteApiMutationQueue = Promise.resolve();
   const readerNotes = createReaderNotesRepository({ vaultRoot });
   const materialReadingState = createMaterialReadingStateRepository({ vaultRoot });
   const stockWatchlist = createStockWatchlistRepository({ vaultRoot });
+  const stockCodes = createStockCodesRepository({ vaultRoot });
+  const llmClient = createLlmClient({
+    apiKey: zhipuApiKey,
+    ...(zhipuBaseUrl ? { baseUrl: zhipuBaseUrl } : {}),
+  });
+  const marketData = createMarketDataService();
+  const stockNews = createStockNewsService();
+  const stockAnalysis = createStockAnalysisService({
+    llmClient,
+    newsService: stockNews,
+    marketService: marketData,
+  });
   const wikiIngest = createWikiIngestRunner({ vaultRoot });
   const readerExplanations = readerExplanationService ??
     createReaderExplanationsService({ vaultRoot });
@@ -1588,7 +1610,35 @@ export function workbenchApiPlugin({
           }
 
           if (req.method === "GET" && url.pathname === "/api/stock-universe") {
-            return json(res, 200, stockUniversePayload());
+            return json(res, 200, stockUniversePayload(await stockCodes.overrides()));
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/stock-codes") {
+            const codes = await stockCodes.list();
+            return json(res, 200, {
+              updatedAt: codes.updatedAt,
+              items: codes.items,
+            });
+          }
+
+          if (req.method === "PUT" && url.pathname === "/api/stock-codes") {
+            const body = await readJson(req, 16 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["name", "code"]),
+              "INVALID_STOCK_CODES_REQUEST",
+            );
+            const item = await stockCodes.set(body.name, body.code);
+            vaultSync.notifyPaths([STOCK_CODES_PATH]);
+            return json(res, 200, item);
+          }
+
+          const stockCodesMatch = url.pathname.match(/^\/api\/stock-codes\/([^/]+)$/);
+          if (req.method === "DELETE" && stockCodesMatch) {
+            const name = decodeURIComponent(stockCodesMatch[1]);
+            const removed = await stockCodes.remove(name);
+            if (removed) vaultSync.notifyPaths([STOCK_CODES_PATH]);
+            return json(res, 200, { removed });
           }
 
           if (req.method === "GET" && url.pathname === "/api/stock-watchlist") {
@@ -1620,6 +1670,60 @@ export function workbenchApiPlugin({
             const removed = await stockWatchlist.remove(name);
             if (removed) vaultSync.notifyPaths([STOCK_WATCHLIST_PATH]);
             return json(res, 200, { removed });
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/market/quotes") {
+            const codes = url.searchParams.getAll("codes");
+            const quotes = await marketData.getQuotes(codes);
+            return json(res, 200, {
+              items: [...quotes.values()],
+            });
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/stock-news") {
+            const name = url.searchParams.get("name") ?? "";
+            const code = url.searchParams.get("code") ?? null;
+            const items = await stockNews.getStockNews({ name, code });
+            return json(res, 200, { name, items });
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/stock-analysis/sentiment") {
+            const body = await readJson(req, 64 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["name", "note", "code", "entityContent"]),
+              "INVALID_STOCK_ANALYSIS_REQUEST",
+            );
+            const task = await stockAnalysis.startSentiment({
+              name: body.name,
+              note: body.note ?? null,
+              code: body.code ?? null,
+              entityContent: body.entityContent ?? null,
+            });
+            return json(res, 202, task);
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/stock-analysis/review") {
+            const body = await readJson(req, 128 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["stocks"]),
+              "INVALID_STOCK_REVIEW_REQUEST",
+            );
+            const task = await stockAnalysis.startReview({
+              stocks: Array.isArray(body.stocks) ? body.stocks : [],
+            });
+            return json(res, 202, task);
+          }
+
+          const stockAnalysisMatch = url.pathname.match(
+            /^\/api\/stock-analysis\/([^/]+)$/,
+          );
+          if (req.method === "GET" && stockAnalysisMatch) {
+            const id = decodeURIComponent(stockAnalysisMatch[1]);
+            const task = stockAnalysis.get(id);
+            if (!task) return json(res, 404, { error: { message: "分析任务不存在。" } });
+            return json(res, 200, task);
           }
 
           if (req.method === "GET" && url.pathname === "/api/social-trends") {

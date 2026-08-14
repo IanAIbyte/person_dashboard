@@ -463,6 +463,20 @@ export function unfollowStock(name) {
   });
 }
 
+export function loadStockCodes() {
+  return withFallback(
+    () => request("/api/stock-codes"),
+    { updatedAt: null, items: [] },
+  );
+}
+
+export function setStockCode(name, code) {
+  return request("/api/stock-codes", {
+    method: "PUT",
+    body: JSON.stringify({ name, code }),
+  });
+}
+
 export function loadSocialInsight(reportId) {
   return withFallback(
     () => request(`/api/social-insights/${encodeURIComponent(reportId)}`),
