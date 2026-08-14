@@ -17,16 +17,6 @@ const REFRESH_INTERVAL_MS = 60_000;
 
 let overviewEntranceHasCompleted = false;
 
-const STAGE_LABELS = {
-  filmed: "已拍",
-  material_validating: "素材验证",
-  framework_ready: "框架就绪",
-  ready_to_shoot: "准备完成",
-  published: "已发布",
-  selected: "已确认",
-  idea: "候选",
-};
-
 export function OverviewPage({ onOpenDocument }) {
   const navigate = useNavigate();
   const [overview, setOverview] = useState(null);
@@ -84,7 +74,6 @@ export function OverviewPage({ onOpenDocument }) {
   const metrics = overview?.data?.metrics ?? {};
   const demoMode = overview?.data?.demoMode === true;
   const recent = overview?.data?.recent ?? [];
-  const activity = overview?.data?.activity ?? [];
   const provenance = overview?.data?.qualityNotices ?? [];
   const graphData = graph?.data;
 
@@ -138,19 +127,11 @@ export function OverviewPage({ onOpenDocument }) {
       </section>
 
       <div className="metric-strip">
-        <MetricStat label="RAW 素材" value={metrics.raw ?? null} hint="原始证据层" />
         <MetricStat label="WIKI 页面" value={metrics.wiki ?? null} hint="知识层" accent />
         <MetricStat
           label="选题"
           value={metrics.topics ?? null}
           hint={`候选 ${metrics.candidates ?? "—"}`}
-        />
-        <MetricStat label="已发布作品" value={metrics.publishedWorks ?? null} hint="抖音" />
-        <MetricStat
-          label="总播放"
-          value={metrics.totalPlays ?? null}
-          hint="全部作品累计"
-          accent
         />
         <MetricStat
           label="知识链接"
@@ -228,41 +209,6 @@ export function OverviewPage({ onOpenDocument }) {
         </div>
 
         <div className="overview-stack">
-          <section className="panel" data-panel>
-            <div className="panel__head">
-              <div>
-                <span className="eyebrow">PIPELINE</span>
-                <h2 className="panel__title" style={{ marginTop: 8 }}>
-                  生产动态
-                </h2>
-              </div>
-            </div>
-            <div className="pipeline">
-              {activity.length === 0 ? (
-                <div className="collection-empty">暂无拍摄动态</div>
-              ) : (
-                activity.map((item) => (
-                  <div
-                    className="pipeline__row"
-                    key={item.id}
-                    onClick={() => onOpenDocument?.(item.documentId)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") onOpenDocument?.(item.documentId);
-                    }}
-                    role="button"
-                    tabIndex={0}
-                  >
-                    <span className="status-dot status-dot--accent status-dot--pulse" />
-                    <span className="pipeline__title">{item.title}</span>
-                    <span className="pipeline__stage">
-                      {STAGE_LABELS[item.status] ?? item.status}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          </section>
-
           <section className="panel" data-panel>
             <div className="panel__head">
               <div>
