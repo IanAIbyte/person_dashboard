@@ -23,7 +23,9 @@ export function App() {
   const [selectedDocumentId, setSelectedDocumentId] = useState(null);
   const [readerContext, setReaderContext] = useState(null);
   const vaultSync = useVaultSync(location.pathname);
-  const routeRevision = `${location.pathname}:${vaultSync.revision}`;
+  // key 只含 vault revision：路由切换走 Router 正常协调（不整树重建），
+  // 仅当 vault 文件变化（revision 递增）时强制重挂载当前页以刷新数据。
+  const routeRevision = String(vaultSync.revision);
 
   useEffect(() => {
     const onKeyDown = (event) => {

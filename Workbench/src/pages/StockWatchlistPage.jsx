@@ -41,6 +41,9 @@ function formatPrice(value) {
   return Number(value).toFixed(2);
 }
 
+// 入场动画会话内只播一次：二次进入直出内容，避免「重新加载」感。
+let watchlistEntranceDone = false;
+
 export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
   const reduceMotion = useReducedMotion();
   const [universe, setUniverse] = useState({ data: null, source: "loading", error: null });
@@ -181,11 +184,15 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
     void refresh();
   }, [codesDraft, refresh]);
 
-  const enter = reduceMotion ? {} : {
+  const enter = reduceMotion || watchlistEntranceDone ? {} : {
     initial: { opacity: 0, y: 10 },
     animate: { opacity: 1, y: 0 },
     transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] },
   };
+
+  useEffect(() => {
+    watchlistEntranceDone = true;
+  }, []);
 
   if (isLoading) {
     return (

@@ -60,8 +60,51 @@ async function withFallback(loader, fallback) {
   }
 }
 
+// GET 响应的 stale-while-revalidate 缓存：命中新鲜缓存直接返回；缓存陈旧
+// 时立即返回旧数据并后台刷新（下次挂载即新数据）；无缓存才真正请求。
+// 目的：路由切换二次进入页面时秒出内容，消除「loading 骨架 → 请求」的刷新感。
+const getCache = new Map(); // path -> { data, at }
+const getInflight = new Map(); // path -> Promise
+
+export function cachedGet(path, ttlMs = 5 * 60_000) {
+  const hit = getCache.get(path);
+  const now = Date.now();
+  if (hit && now - hit.at < ttlMs) {
+    return Promise.resolve(hit.data);
+  }
+  if (hit) {
+    // 陈旧：先回旧数据，后台静默刷新。
+    void request(path)
+      .then((data) => getCache.set(path, { data, at: Date.now() }))
+      .catch(() => {});
+    return Promise.resolve(hit.data);
+  }
+  const inflight = getInflight.get(path);
+  if (inflight) return inflight;
+  const pending = request(path)
+    .then((data) => {
+      getCache.set(path, { data, at: Date.now() });
+      return data;
+    })
+    .finally(() => getInflight.delete(path));
+  getInflight.set(path, pending);
+  return pending;
+}
+
+// mutation 后失效相关 GET 缓存（支持前缀匹配）；无参清空全部。
+export function invalidateCache(prefix = null) {
+  if (!prefix) {
+    getCache.clear();
+    return;
+  }
+  for (const key of getCache.keys()) {
+    if (key.startsWith(prefix)) getCache.delete(key);
+  }
+}
+
 export function loadOverview() {
-  return withFallback(() => request("/api/overview"), fallbackOverview);
+  // ttl 45s：短于页面的 60s 轮询，轮询仍能拿到真数据；二次进入秒出缓存。
+  return withFallback(() => cachedGet("/api/overview", 45_000), fallbackOverview);
 }
 
 let dailyHotLoader = null;
@@ -136,7 +179,7 @@ export function loadCollection(kind, params = {}) {
   });
 
   return withFallback(
-    () => request(`/api/collections/${kind}?${search.toString()}`),
+    () => cachedGet(`/api/collections/${kind}?${search.toString()}`),
     () => {
       const overviewRows =
         kind === "wiki"
@@ -172,7 +215,7 @@ export function loadMaterialsHome() {
 
 export function loadBooks() {
   return withFallback(
-    () => request("/api/books"),
+    () => cachedGet("/api/books"),
     { generatedAt: null, total: 0, chapterTotal: 0, books: [] },
   );
 }
@@ -358,7 +401,7 @@ export function createWikiIngestEventSource(jobId) {
 }
 
 export function loadGraph() {
-  return withFallback(() => request("/api/graph"), {
+  return withFallback(() => cachedGet("/api/graph"), {
     generatedAt: null,
     stats: { nodeCount: 0, edgeCount: 0, isolatedCount: 0 },
     typeCounts: {},
@@ -418,7 +461,7 @@ export function loadSocialInsights() {
 
 export function loadCareer() {
   return withFallback(
-    () => request("/api/career"),
+    () => cachedGet("/api/career"),
     {
       available: false,
       generatedAt: null,
@@ -437,14 +480,14 @@ export function loadCareer() {
 
 export function loadStockUniverse() {
   return withFallback(
-    () => request("/api/stock-universe"),
+    () => cachedGet("/api/stock-universe"),
     { generatedAt: null, total: 0, chains: [] },
   );
 }
 
 export function loadStockWatchlist() {
   return withFallback(
-    () => request("/api/stock-watchlist"),
+    () => cachedGet("/api/stock-watchlist"),
     { updatedAt: null, total: 0, items: [] },
   );
 }
@@ -453,6 +496,9 @@ export function followStock(name) {
   return request("/api/stock-watchlist", {
     method: "POST",
     body: JSON.stringify({ name }),
+  }).then((result) => {
+    invalidateCache("/api/stock-watchlist");
+    return result;
   });
 }
 
@@ -460,6 +506,9 @@ export function unfollowStock(name) {
   return request(`/api/stock-watchlist/${encodeURIComponent(name)}`, {
     method: "DELETE",
     body: JSON.stringify({}),
+  }).then((result) => {
+    invalidateCache("/api/stock-watchlist");
+    return result;
   });
 }
 
@@ -467,12 +516,15 @@ export function updateStockMeta(name, meta) {
   return request(`/api/stock-watchlist/${encodeURIComponent(name)}`, {
     method: "PUT",
     body: JSON.stringify(meta),
+  }).then((result) => {
+    invalidateCache("/api/stock-watchlist");
+    return result;
   });
 }
 
 export function loadStockCodes() {
   return withFallback(
-    () => request("/api/stock-codes"),
+    () => cachedGet("/api/stock-codes"),
     { updatedAt: null, items: [] },
   );
 }
@@ -481,14 +533,19 @@ export function setStockCode(name, code) {
   return request("/api/stock-codes", {
     method: "PUT",
     body: JSON.stringify({ name, code }),
+  }).then((result) => {
+    invalidateCache("/api/stock-codes");
+    invalidateCache("/api/stock-universe");
+    return result;
   });
 }
 
 export function loadMarketQuotes(codes) {
   const search = new URLSearchParams();
   for (const code of codes) search.append("codes", code);
+  // 行情时效性强，ttl 与服务端行情缓存一致（60s）。
   return withFallback(
-    () => request(`/api/market/quotes?${search.toString()}`),
+    () => cachedGet(`/api/market/quotes?${search.toString()}`, 60_000),
     { items: [] },
   );
 }
@@ -497,7 +554,7 @@ export function loadStockNews(name, code) {
   const search = new URLSearchParams({ name });
   if (code) search.set("code", code);
   return withFallback(
-    () => request(`/api/stock-news?${search.toString()}`),
+    () => cachedGet(`/api/stock-news?${search.toString()}`),
     { name, items: [] },
   );
 }

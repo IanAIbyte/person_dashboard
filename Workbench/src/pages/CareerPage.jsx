@@ -28,6 +28,9 @@ function groupByDirection(items) {
   return [...map.entries()].sort((a, b) => b[1].length - a[1].length);
 }
 
+// 入场动画会话内只播一次：二次进入直出内容，避免「重新加载」感。
+let careerEntranceDone = false;
+
 export function CareerPage({ onOpenDocument, syncRevision = 0 }) {
   const reduceMotion = useReducedMotion();
   const [result, setResult] = useState({ data: null, source: "loading", error: null });
@@ -49,13 +52,17 @@ export function CareerPage({ onOpenDocument, syncRevision = 0 }) {
   const { data, source, error } = result;
   const isLoading = source === "loading";
 
-  const enter = reduceMotion
+  const enter = reduceMotion || careerEntranceDone
     ? {}
     : {
         initial: { opacity: 0, y: 10 },
         animate: { opacity: 1, y: 0 },
         transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] },
       };
+
+  useEffect(() => {
+    careerEntranceDone = true;
+  }, []);
 
   if (isLoading) {
     return (
