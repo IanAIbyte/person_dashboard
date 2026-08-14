@@ -6,7 +6,14 @@ import { DecryptedText } from "../components/DecryptedText";
 import { DotEyes } from "../components/DotEyes";
 import { KnowledgeGraph } from "../components/KnowledgeGraph";
 import { MetricStat } from "../components/MetricStat";
-import { loadGraph, loadOverview } from "../lib/api";
+import {
+  loadBooks,
+  loadCareer,
+  loadDailyHot,
+  loadGraph,
+  loadOverview,
+  loadStockWatchlist,
+} from "../lib/api";
 import { formatCompactDate } from "../lib/format";
 
 const prefersReducedMotion = () =>
@@ -17,10 +24,16 @@ const REFRESH_INTERVAL_MS = 60_000;
 
 let overviewEntranceHasCompleted = false;
 
+const localWorkbench = import.meta.env.VITE_WORKBENCH_HOSTED !== "true";
+
 export function OverviewPage({ onOpenDocument }) {
   const navigate = useNavigate();
   const [overview, setOverview] = useState(null);
   const [graph, setGraph] = useState(null);
+  const [books, setBooks] = useState(null);
+  const [dailyHot, setDailyHot] = useState(null);
+  const [career, setCareer] = useState(null);
+  const [watchlist, setWatchlist] = useState(null);
   const rootRef = useRef(null);
 
   useEffect(() => {
@@ -37,6 +50,20 @@ export function OverviewPage({ onOpenDocument }) {
     loadGraph().then((res) => {
       if (!cancelled) setGraph(res);
     });
+    loadBooks().then((res) => {
+      if (!cancelled) setBooks(res);
+    });
+    loadDailyHot().then((res) => {
+      if (!cancelled) setDailyHot(res);
+    });
+    if (localWorkbench) {
+      loadCareer().then((res) => {
+        if (!cancelled) setCareer(res);
+      });
+      loadStockWatchlist().then((res) => {
+        if (!cancelled) setWatchlist(res);
+      });
+    }
     const interval = window.setInterval(refreshOverview, REFRESH_INTERVAL_MS);
     window.addEventListener("focus", refreshOverview);
     document.addEventListener("visibilitychange", refreshWhenVisible);
@@ -76,6 +103,7 @@ export function OverviewPage({ onOpenDocument }) {
   const recent = overview?.data?.recent ?? [];
   const provenance = overview?.data?.qualityNotices ?? [];
   const graphData = graph?.data;
+  const hotItems = dailyHot?.data?.tiers?.mustRead ?? [];
 
   const today = useMemo(
     () =>
@@ -127,17 +155,52 @@ export function OverviewPage({ onOpenDocument }) {
       </section>
 
       <div className="metric-strip">
-        <MetricStat label="WIKI 页面" value={metrics.wiki ?? null} hint="知识层" accent />
+        <MetricStat
+          label="WIKI 页面"
+          value={metrics.wiki ?? null}
+          hint="知识层"
+          accent
+          onClick={() => navigate("/wiki")}
+        />
+        <MetricStat
+          label="书架"
+          value={books?.data?.total ?? null}
+          hint={`章节 ${books?.data?.chapterTotal ?? "—"}`}
+          onClick={() => navigate("/books")}
+        />
         <MetricStat
           label="选题"
           value={metrics.topics ?? null}
           hint={`候选 ${metrics.candidates ?? "—"}`}
+          onClick={() => navigate("/topics")}
         />
         <MetricStat
           label="知识链接"
           value={graphData?.stats?.edgeCount ?? null}
           hint="Wiki 双向关系"
+          onClick={() => navigate("/graph")}
         />
+        {localWorkbench ? (
+          <MetricStat
+            label="面试题库"
+            value={
+              career?.source === "live"
+                ? (career.data?.questionBanks?.curated ?? []).length +
+                  (career.data?.questionBanks?.raw ?? []).length
+                : null
+            }
+            hint="求职备战"
+            onClick={() => navigate("/career")}
+          />
+        ) : null}
+        {localWorkbench ? (
+          <MetricStat
+            label="关注个股"
+            value={watchlist?.source === "live" ? watchlist.data?.total ?? 0 : null}
+            hint="重点个股"
+            onClick={() => navigate("/stocks")}
+          />
+        ) : null}
       </div>
 
       <div className="overview-grid">
@@ -209,6 +272,56 @@ export function OverviewPage({ onOpenDocument }) {
         </div>
 
         <div className="overview-stack">
+          <section className="panel" data-panel>
+            <div className="panel__head">
+              <div>
+                <span className="eyebrow">AI HOT</span>
+                <h2 className="panel__title" style={{ marginTop: 8 }}>
+                  今日热点
+                </h2>
+              </div>
+              <button
+                className="graph-filter"
+                onClick={() => navigate("/daily-hot")}
+                type="button"
+              >
+                查看全部
+              </button>
+            </div>
+            <div className="recent-list">
+              {dailyHot == null ? (
+                <div className="collection-empty">热点加载中…</div>
+              ) : hotItems.length === 0 ? (
+                <div className="collection-empty">
+                  {dailyHot.source === "live" ? "今日暂无必读热点" : "热点服务不可用"}
+                </div>
+              ) : (
+                hotItems.slice(0, 3).map((item, index) => {
+                  const url = item.links?.story || item.links?.aihot;
+                  return (
+                    <a
+                      className="recent-item"
+                      href={url ?? "#"}
+                      key={item.id ?? index}
+                      style={{ color: "inherit", textDecoration: "none" }}
+                      target={url ? "_blank" : undefined}
+                      rel="noreferrer"
+                    >
+                      <span className="status-dot status-dot--accent" />
+                      <span className="recent-item__title">{item.title}</span>
+                      <span className="recent-item__meta">
+                        {formatCompactDate(
+                          item.latestAt || item.discoveredAt || item.publishedAt,
+                          false,
+                        )}
+                      </span>
+                    </a>
+                  );
+                })
+              )}
+            </div>
+          </section>
+
           <section className="panel" data-panel>
             <div className="panel__head">
               <div>
