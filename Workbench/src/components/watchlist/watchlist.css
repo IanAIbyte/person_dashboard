@@ -1285,22 +1285,77 @@
 .watchlist-chain--list .watchlist-chain__head--toggle { margin-bottom: 6px; }
 .watchlist-chain--list .watchlist-chain__title h2 { font-size: 16px; }
 
-/* ===== 清单视图：一行一股 ===== */
+/* ===== 链 Tab 导航（全部 / 国产链 / 海外链 / 封测） ===== */
+.watchlist-chaintabs {
+  display: flex;
+  gap: 2px;
+  width: fit-content;
+  max-width: 100%;
+  background: var(--surface-sunken);
+  border-radius: var(--r-pill);
+  padding: 3px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.watchlist-chaintabs::-webkit-scrollbar { display: none; }
+
+.watchlist-chaintabs__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  border-radius: var(--r-pill);
+  padding: 7px 15px;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.2s var(--ease), color 0.2s var(--ease);
+}
+
+.watchlist-chaintabs__btn:hover { color: var(--ink); }
+
+.watchlist-chaintabs__btn--active {
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+.watchlist-chaintabs__count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.watchlist-chaintabs__btn--active .watchlist-chaintabs__count { color: var(--accent-strong); }
+
 /* ===== 清单模式整体密度 ===== */
 .page--watchlist-density {
-  gap: 14px;
+  gap: 12px;
+}
+
+/* ===== 清单视图：一行一股，宽屏自动双列 ===== */
+.watchlist-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+  column-gap: 12px;
 }
 
 .watchlist-list__head,
 .watchlist-list__row {
   display: grid;
-  grid-template-columns: minmax(128px, 1.6fr) 72px 92px 84px minmax(108px, 1fr) 40px 48px;
+  grid-template-columns: minmax(110px, 1.6fr) 72px 80px 84px minmax(88px, 1fr) 36px 44px;
   align-items: center;
   gap: 8px;
   padding: 0 12px;
 }
 
 .watchlist-list__head {
+  grid-column: 1 / -1;
   height: 28px;
   font-family: var(--font-mono);
   font-size: 10.5px;
@@ -1319,7 +1374,7 @@
 }
 
 .watchlist-list__row {
-  height: 38px;
+  height: 36px;
   border-bottom: 1px solid var(--line);
   cursor: pointer;
   transition: background 0.15s var(--ease);
@@ -1438,6 +1493,11 @@
     gap: 6px;
     padding: 0 8px;
   }
+
+  /* 触屏点击区放宽；双列回落为单列 */
+  .watchlist-list { grid-template-columns: 1fr; }
+
+  .watchlist-list__row { height: 42px; }
 
   /* 触屏优先级：留名称(含评级信号灯)/现价/涨跌/星标；
      代码、评级文字、「详情」提示隐藏，整行可点开研究台 */

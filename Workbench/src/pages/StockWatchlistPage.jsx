@@ -72,6 +72,7 @@ let watchlistEntranceDone = false;
 
 const VIEW_STORAGE_KEY = "workbench.watchlist-view.v1";
 const COLLAPSED_STORAGE_KEY = "workbench.watchlist-collapsed.v1";
+const CHAIN_TAB_STORAGE_KEY = "workbench.watchlist-chain.v1";
 
 const STUDY_TABS = [
   { key: "overview", label: "总览" },
@@ -109,6 +110,9 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
   const [sortKey, setSortKey] = useState("chain"); // chain | pct | name
   const [viewMode, setViewMode] = useState(loadStoredView); // list（默认，扫描密度）| grid（卡片浏览）
   const [collapsedChains, setCollapsedChains] = useState(loadStoredCollapsed); // chainLabel -> 收起
+  const [activeChain, setActiveChain] = useState(() => {
+    try { return localStorage.getItem(CHAIN_TAB_STORAGE_KEY) ?? "all"; } catch { return "all"; }
+  }); // "all" | chainLabel，链 Tab 当前分组
   const [selected, setSelected] = useState(() => new Set()); // 多选对比（公司名）
   const [detailName, setDetailName] = useState(null); // 详情展开的公司名
   const [codesDraft, setCodesDraft] = useState(() => new Map()); // name -> 编辑中的代码
@@ -120,6 +124,10 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
   useEffect(() => {
     try { localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify([...collapsedChains])); } catch { /* 同上 */ }
   }, [collapsedChains]);
+
+  useEffect(() => {
+    try { localStorage.setItem(CHAIN_TAB_STORAGE_KEY, activeChain); } catch { /* 同上 */ }
+  }, [activeChain]);
 
   const toggleChainCollapsed = useCallback((label) => {
     setCollapsedChains((current) => {
@@ -224,6 +232,26 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
     }
     return [...groups.entries()].map(([label, stocks]) => ({ label, stocks }));
   }, [visibleStocks]);
+
+  // 链 Tab 选项基于全量分组（不受「只看已关注/有档案」筛选影响），保证导航稳定。
+  const chainTabOptions = useMemo(() => {
+    const groups = new Map();
+    for (const stock of allStocks) {
+      if (!groups.has(stock.chainLabel)) groups.set(stock.chainLabel, 0);
+      groups.set(stock.chainLabel, groups.get(stock.chainLabel) + 1);
+    }
+    return [
+      { key: "all", label: "全部", count: allStocks.length },
+      ...[...groups.entries()].map(([label, count]) => ({ key: label, label, count })),
+    ];
+  }, [allStocks]);
+
+  // 链 Tab 当前分组失效（数据变化）时回退「全部」。
+  const activeChainValid = activeChain === "all" || chainTabOptions.some((t) => t.key === activeChain);
+  const effectiveChain = activeChainValid ? activeChain : "all";
+  const displayChains = effectiveChain === "all"
+    ? visibleChains
+    : visibleChains.filter((chain) => chain.label === effectiveChain);
 
   const totalFollowed = followed.size;
 
@@ -363,6 +391,22 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
         </div>
       ) : null}
 
+      <div className="watchlist-chaintabs" role="tablist" aria-label="链分组">
+        {chainTabOptions.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={effectiveChain === t.key}
+            className={`watchlist-chaintabs__btn${effectiveChain === t.key ? " watchlist-chaintabs__btn--active" : ""}`}
+            onClick={() => setActiveChain(t.key)}
+          >
+            {t.label}
+            <span className="watchlist-chaintabs__count">{t.count}</span>
+          </button>
+        ))}
+      </div>
+
       {selected.size >= 2 ? (
         <CompareBar
           stocks={allStocks.filter((s) => selected.has(s.name))}
@@ -372,13 +416,13 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
         />
       ) : null}
 
-      {visibleChains.length === 0 && !isLoading ? (
+      {displayChains.length === 0 && !isLoading ? (
         <div className="watchlist-empty">
           <p>{onlyFollowed || onlyResearched ? "当前筛选条件下暂无个股。" : "暂无个股数据。"}</p>
         </div>
       ) : null}
 
-      {visibleChains.map((chain, chainIndex) => {
+      {displayChains.map((chain, chainIndex) => {
         const chainFollowed = chain.stocks.filter((s) => followed.has(s.name)).length;
         const collapsed = collapsedChains.has(chain.label);
         return (
