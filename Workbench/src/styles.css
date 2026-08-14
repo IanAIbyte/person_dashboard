@@ -831,11 +831,7 @@ h3 {
   background: var(--surface-sunken);
 }
 
-.sidebar__close {
-  display: none;
-}
-
-/* 桌面端侧栏收缩/展开按钮（移动端隐藏，用抽屉关闭按钮） */
+/* 桌面端侧栏收缩/展开按钮（移动端隐藏，用遮罩关闭抽屉） */
 .sidebar__collapse {
   display: inline-flex;
 }
@@ -2316,10 +2312,6 @@ h3 {
   .sidebar--open {
     transform: translateX(0);
     box-shadow: var(--shadow-lg);
-  }
-
-  .sidebar__close {
-    display: inline-flex;
   }
 
   .sidebar-backdrop {

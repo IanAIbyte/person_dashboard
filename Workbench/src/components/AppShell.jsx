@@ -6,17 +6,16 @@ import {
   IconBriefcase,
   IconBulb,
   IconChartCandle,
+  IconChevronLeft,
+  IconChevronRight,
   IconCommand,
   IconHome,
-  IconLayoutSidebarLeftCollapse,
-  IconLayoutSidebarLeftExpand,
   IconLibrary,
   IconMenu2,
   IconRadar2,
   IconSearch,
   IconSettings,
   IconTopologyStar3,
-  IconX,
 } from "@tabler/icons-react";
 
 const localWorkbench = import.meta.env.VITE_WORKBENCH_HOSTED !== "true";
@@ -164,18 +163,10 @@ export function AppShell({ children, onOpenSearch, sync }) {
               type="button"
             >
               {collapsed ? (
-                <IconLayoutSidebarLeftExpand aria-hidden="true" />
+                <IconChevronRight aria-hidden="true" />
               ) : (
-                <IconLayoutSidebarLeftCollapse aria-hidden="true" />
+                <IconChevronLeft aria-hidden="true" />
               )}
-            </button>
-            <button
-              aria-label="关闭导航"
-              className="icon-button sidebar__close"
-              onClick={() => setMobileOpen(false)}
-              type="button"
-            >
-              <IconX aria-hidden="true" />
             </button>
           </div>
           <div className="sidebar__tag">PERSONAL AI WORKBENCH</div>
