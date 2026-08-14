@@ -48,6 +48,14 @@ function normalizeName(value) {
   return result;
 }
 
+function normalizeOptional(value, maximum = 200) {
+  if (value == null || value === "") return null;
+  if (typeof value !== "string" || value.length > maximum) {
+    fail("INVALID_STOCK_META", "关注元数据字段无效。");
+  }
+  return value.normalize("NFC").trim() || null;
+}
+
 function emptyStore() {
   return { version: STORE_VERSION, updatedAt: null, items: [] };
 }
@@ -123,7 +131,12 @@ function validatePersistedStore(value) {
       fail("STOCK_WATCHLIST_CORRUPT", "关注状态存在重复记录。");
     }
     seenNames.add(name);
-    return { name, addedAt: String(item.addedAt || "") };
+    return {
+      name,
+      group: normalizeOptional(item.group),
+      note: normalizeOptional(item.note),
+      addedAt: String(item.addedAt || ""),
+    };
   });
   return {
     version: STORE_VERSION,
@@ -194,7 +207,7 @@ export function createStockWatchlistRepository({
     return clone(await readStore());
   }
 
-  function add(name) {
+  function add(name, meta = {}) {
     return mutate(async () => {
       const safeName = normalizeName(name);
       const timestamp = now().toISOString();
@@ -202,6 +215,8 @@ export function createStockWatchlistRepository({
       const previous = store.items.find((item) => item.name === safeName);
       const next = {
         name: safeName,
+        group: normalizeOptional(meta.group ?? previous?.group),
+        note: normalizeOptional(meta.note ?? previous?.note),
         addedAt: previous?.addedAt || timestamp,
       };
       const items = [
@@ -228,5 +243,24 @@ export function createStockWatchlistRepository({
     });
   }
 
-  return Object.freeze({ list, add, remove });
+  // 更新某关注股的 group/note（不改变 addedAt）。
+  function updateMeta(name, meta = {}) {
+    return mutate(async () => {
+      const safeName = normalizeName(name);
+      const store = await readStore();
+      const previous = store.items.find((item) => item.name === safeName);
+      if (!previous) return null;
+      const next = {
+        ...previous,
+        group: normalizeOptional(meta.group ?? previous.group),
+        note: normalizeOptional(meta.note ?? previous.note),
+      };
+      const items = store.items.map((item) => (item.name === safeName ? next : item));
+      const timestamp = now().toISOString();
+      const saved = await writeStore({ version: STORE_VERSION, updatedAt: timestamp, items });
+      return clone(saved.items.find((item) => item.name === safeName));
+    });
+  }
+
+  return Object.freeze({ list, add, remove, updateMeta });
 }

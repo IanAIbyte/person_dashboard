@@ -1646,7 +1646,7 @@ export function workbenchApiPlugin({
             return json(res, 200, {
               updatedAt: watchlist.updatedAt,
               total: watchlist.items.length,
-              items: watchlist.items.map((item) => item.name),
+              items: watchlist.items,
             });
           }
 
@@ -1654,10 +1654,13 @@ export function workbenchApiPlugin({
             const body = await readJson(req, 16 * 1024);
             assertAllowedObjectKeys(
               body,
-              new Set(["name"]),
+              new Set(["name", "group", "note"]),
               "INVALID_STOCK_WATCHLIST_REQUEST",
             );
-            const item = await stockWatchlist.add(body.name);
+            const item = await stockWatchlist.add(body.name, {
+              group: body.group,
+              note: body.note,
+            });
             vaultSync.notifyPaths([STOCK_WATCHLIST_PATH]);
             return json(res, 200, item);
           }
@@ -1665,6 +1668,22 @@ export function workbenchApiPlugin({
           const stockWatchlistMatch = url.pathname.match(
             /^\/api\/stock-watchlist\/([^/]+)$/,
           );
+          if (req.method === "PUT" && stockWatchlistMatch) {
+            const name = decodeURIComponent(stockWatchlistMatch[1]);
+            const body = await readJson(req, 16 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["group", "note"]),
+              "INVALID_STOCK_WATCHLIST_REQUEST",
+            );
+            const item = await stockWatchlist.updateMeta(name, {
+              group: body.group,
+              note: body.note,
+            });
+            if (!item) return json(res, 404, { error: { message: "该股尚未关注。" } });
+            vaultSync.notifyPaths([STOCK_WATCHLIST_PATH]);
+            return json(res, 200, item);
+          }
           if (req.method === "DELETE" && stockWatchlistMatch) {
             const name = decodeURIComponent(stockWatchlistMatch[1]);
             const removed = await stockWatchlist.remove(name);

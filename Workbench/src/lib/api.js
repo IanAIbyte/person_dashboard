@@ -463,6 +463,13 @@ export function unfollowStock(name) {
   });
 }
 
+export function updateStockMeta(name, meta) {
+  return request(`/api/stock-watchlist/${encodeURIComponent(name)}`, {
+    method: "PUT",
+    body: JSON.stringify(meta),
+  });
+}
+
 export function loadStockCodes() {
   return withFallback(
     () => request("/api/stock-codes"),
@@ -475,6 +482,42 @@ export function setStockCode(name, code) {
     method: "PUT",
     body: JSON.stringify({ name, code }),
   });
+}
+
+export function loadMarketQuotes(codes) {
+  const search = new URLSearchParams();
+  for (const code of codes) search.append("codes", code);
+  return withFallback(
+    () => request(`/api/market/quotes?${search.toString()}`),
+    { items: [] },
+  );
+}
+
+export function loadStockNews(name, code) {
+  const search = new URLSearchParams({ name });
+  if (code) search.set("code", code);
+  return withFallback(
+    () => request(`/api/stock-news?${search.toString()}`),
+    { name, items: [] },
+  );
+}
+
+export function startStockSentiment(payload) {
+  return request("/api/stock-analysis/sentiment", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function startStockReview(stocks) {
+  return request("/api/stock-analysis/review", {
+    method: "POST",
+    body: JSON.stringify({ stocks }),
+  });
+}
+
+export function getStockAnalysis(id) {
+  return request(`/api/stock-analysis/${encodeURIComponent(id)}`);
 }
 
 export function loadSocialInsight(reportId) {
