@@ -3,7 +3,6 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-
 import { AppShell } from "./components/AppShell";
 import { DocumentDrawer } from "./components/DocumentDrawer";
 import { SearchPalette } from "./components/SearchPalette";
-import { CollectionPage } from "./pages/CollectionPage";
 import { DailyHotPage } from "./pages/DailyHotPage";
 import { GraphPage } from "./pages/GraphPage";
 import { BooksPage } from "./pages/BooksPage";
@@ -73,18 +72,6 @@ export function App() {
         <Routes key={routeRevision}>
           <Route path="/" element={<OverviewPage onOpenDocument={openDocument} />} />
           <Route path="/graph" element={<GraphPage onOpenDocument={openDocument} />} />
-          <Route
-            path="/wiki"
-            element={
-              <CollectionPage
-                kind="wiki"
-                eyebrow="KNOWLEDGE LAYER"
-                title="Wiki 层"
-                description="结构化知识：来源拆解、概念、框架、诊断与待验证问题。星图的线性视图。"
-                onOpenDocument={openDocument}
-              />
-            }
-          />
           <Route path="/books" element={<BooksPage onOpenDocument={openDocument} />} />
           <Route path="/books/:bookId" element={<BooksPage onOpenDocument={openDocument} />} />
           <Route path="/daily-hot" element={<DailyHotPage />} />

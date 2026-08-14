@@ -101,7 +101,6 @@ export function OverviewPage({ onOpenDocument }) {
   const metrics = overview?.data?.metrics ?? {};
   const demoMode = overview?.data?.demoMode === true;
   const recent = overview?.data?.recent ?? [];
-  const provenance = overview?.data?.qualityNotices ?? [];
   const graphData = graph?.data;
   const hotItems = dailyHot?.data?.tiers?.mustRead ?? [];
 
@@ -156,13 +155,6 @@ export function OverviewPage({ onOpenDocument }) {
 
       <div className="metric-strip">
         <MetricStat
-          label="WIKI 页面"
-          value={metrics.wiki ?? null}
-          hint="知识层"
-          accent
-          onClick={() => navigate("/wiki")}
-        />
-        <MetricStat
           label="书架"
           value={books?.data?.total ?? null}
           hint={`章节 ${books?.data?.chapterTotal ?? "—"}`}
@@ -177,7 +169,7 @@ export function OverviewPage({ onOpenDocument }) {
         <MetricStat
           label="知识链接"
           value={graphData?.stats?.edgeCount ?? null}
-          hint="Wiki 双向关系"
+          hint="知识星图双向关系"
           onClick={() => navigate("/graph")}
         />
         {localWorkbench ? (
@@ -320,45 +312,6 @@ export function OverviewPage({ onOpenDocument }) {
                 })
               )}
             </div>
-          </section>
-
-          <section className="panel" data-panel>
-            <div className="panel__head">
-              <div>
-                <span className="eyebrow">WIKI STATUS</span>
-                <h2 className="panel__title" style={{ marginTop: 8 }}>
-                  知识层健康度
-                </h2>
-              </div>
-            </div>
-            <div className="pipeline">
-              {[
-                ["active", "活跃", overview?.data?.wikiStatus?.active],
-                ["needsReview", "待复核", overview?.data?.wikiStatus?.needsReview],
-                ["deprecated", "已弃用", overview?.data?.wikiStatus?.deprecated],
-              ].map(([key, label, count]) => (
-                <div className="pipeline__row" key={key}>
-                  <span
-                    className={`status-dot${
-                      key === "active"
-                        ? " status-dot--ok"
-                        : key === "needsReview"
-                          ? " status-dot--warn"
-                          : ""
-                    }`}
-                  />
-                  <span className="pipeline__title">{label}</span>
-                  <span className="pipeline__stage mono">{count ?? "—"}</span>
-                </div>
-              ))}
-            </div>
-            {provenance.length > 0 ? (
-              <div className="provenance">
-                {provenance.slice(0, 2).map((line) => (
-                  <div key={line}>{line}</div>
-                ))}
-              </div>
-            ) : null}
           </section>
         </div>
       </div>

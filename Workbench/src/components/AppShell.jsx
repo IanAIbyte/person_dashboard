@@ -10,7 +10,6 @@ import {
   IconChevronRight,
   IconCommand,
   IconHome,
-  IconLibrary,
   IconMenu2,
   IconRadar2,
   IconSearch,
@@ -23,7 +22,6 @@ const localWorkbench = import.meta.env.VITE_WORKBENCH_HOSTED !== "true";
 const primaryNavigation = [
   { to: "/", label: "总览", icon: IconHome, end: true },
   { to: "/graph", label: "知识星图", icon: IconTopologyStar3 },
-  { to: "/wiki", label: "Wiki 层", icon: IconLibrary },
   { to: "/books", label: "书架", icon: IconBooks },
   { to: "/daily-hot", label: "每日热点", icon: IconRadar2 },
   ...(localWorkbench
