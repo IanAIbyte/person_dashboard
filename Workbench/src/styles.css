@@ -746,6 +746,12 @@ h3 {
   font-weight: 500;
   transition: background 0.16s var(--ease), color 0.16s var(--ease);
   position: relative;
+  /* 导航项支持拖拽排序（motion Reorder），用 grab 光标提示 */
+  cursor: grab;
+}
+
+.sidebar__nav-item:active {
+  cursor: grabbing;
 }
 
 .sidebar__nav-item:hover {

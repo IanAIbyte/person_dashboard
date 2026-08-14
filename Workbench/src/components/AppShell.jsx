@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
+import { Reorder } from "motion/react";
 import {
   IconBooks,
   IconBriefcase,
@@ -33,8 +34,40 @@ const primaryNavigation = [
   { to: "/topics", label: "灵感库", icon: IconBulb },
 ];
 
+// 导航顺序持久化：存路由数组，恢复时按序重排；未记录的新增项保持默认顺序追加。
+const NAV_ORDER_KEY = "workbench.nav-order.v1";
+
+function loadNavOrder(defaults) {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(NAV_ORDER_KEY));
+    if (!Array.isArray(saved)) return defaults;
+    const byRoute = new Map(defaults.map((item) => [item.to, item]));
+    const ordered = saved
+      .filter((to) => byRoute.has(to))
+      .map((to) => byRoute.get(to));
+    const rest = defaults.filter((item) => !saved.includes(item.to));
+    return ordered.length ? [...ordered, ...rest] : defaults;
+  } catch {
+    return defaults;
+  }
+}
+
+function saveNavOrder(items) {
+  try {
+    window.localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(items.map((i) => i.to)));
+  } catch {
+    // 隐私模式等场景写入失败时静默降级，仅本次会话内保持顺序。
+  }
+}
+
 export function AppShell({ children, onOpenSearch, sync }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [navItems, setNavItems] = useState(() => loadNavOrder(primaryNavigation));
+
+  const handleNavReorder = (next) => {
+    setNavItems(next);
+    saveNavOrder(next);
+  };
 
   useEffect(() => {
     if (!mobileOpen) return undefined;
@@ -58,7 +91,7 @@ export function AppShell({ children, onOpenSearch, sync }) {
         </button>
         <span className="mobile-header__brand">
           <img alt="" aria-hidden="true" src="/workbench-mark.svg" />
-          <span>个人 AI</span>
+          <span>司南工作台</span>
         </span>
         <button
           aria-label="搜索"
@@ -84,7 +117,7 @@ export function AppShell({ children, onOpenSearch, sync }) {
           <div className="sidebar__brand-row">
             <NavLink className="sidebar__brand" onClick={() => setMobileOpen(false)} to="/">
               <img alt="" aria-hidden="true" src="/workbench-mark.svg" />
-              <span>个人 AI</span>
+              <span>司南工作台</span>
             </NavLink>
             <button
               aria-label="关闭导航"
@@ -97,25 +130,39 @@ export function AppShell({ children, onOpenSearch, sync }) {
           </div>
           <div className="sidebar__tag">PERSONAL AI WORKBENCH</div>
 
-          <nav aria-label="主要导航" className="sidebar__nav">
-            {primaryNavigation.map((item) => {
+          <Reorder.Group
+            as="nav"
+            aria-label="主要导航"
+            axis="y"
+            className="sidebar__nav"
+            values={navItems}
+            onReorder={handleNavReorder}
+          >
+            {navItems.map((item) => {
               const Icon = item.icon;
               return (
-                <NavLink
-                  className={({ isActive }) =>
-                    `sidebar__nav-item${isActive ? " sidebar__nav-item--active" : ""}`
-                  }
-                  end={item.end}
+                <Reorder.Item
+                  as="div"
                   key={item.to}
-                  onClick={() => setMobileOpen(false)}
-                  to={item.to}
+                  value={item}
+                  style={{ position: "relative", zIndex: 1 }}
                 >
-                  <Icon aria-hidden="true" className="sidebar__nav-icon" stroke={1.7} />
-                  <span>{item.label}</span>
-                </NavLink>
+                  <NavLink
+                    className={({ isActive }) =>
+                      `sidebar__nav-item${isActive ? " sidebar__nav-item--active" : ""}`
+                    }
+                    draggable={false}
+                    end={item.end}
+                    onClick={() => setMobileOpen(false)}
+                    to={item.to}
+                  >
+                    <Icon aria-hidden="true" className="sidebar__nav-icon" stroke={1.7} />
+                    <span>{item.label}</span>
+                  </NavLink>
+                </Reorder.Item>
               );
             })}
-          </nav>
+          </Reorder.Group>
         </div>
 
         <div className="sidebar__bottom">
