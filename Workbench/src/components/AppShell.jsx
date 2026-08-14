@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
-  IconBrandTiktok,
   IconBooks,
   IconBriefcase,
   IconBulb,
@@ -14,8 +13,6 @@ import {
   IconRadar2,
   IconSearch,
   IconSettings,
-  IconSocial,
-  IconStack2,
   IconTopologyStar3,
   IconX,
 } from "@tabler/icons-react";
@@ -26,12 +23,8 @@ const primaryNavigation = [
   { to: "/", label: "总览", icon: IconHome, end: true },
   { to: "/graph", label: "知识星图", icon: IconTopologyStar3 },
   { to: "/wiki", label: "Wiki 层", icon: IconLibrary },
-  { to: "/materials", label: "素材层", icon: IconStack2 },
   { to: "/books", label: "书架", icon: IconBooks },
   { to: "/daily-hot", label: "每日热点", icon: IconRadar2 },
-  ...(localWorkbench
-    ? [{ to: "/social-insights", label: "社媒洞察", icon: IconSocial }]
-    : []),
   ...(localWorkbench
     ? [{ to: "/career", label: "求职备战", icon: IconBriefcase }]
     : []),
@@ -40,7 +33,6 @@ const primaryNavigation = [
     : []),
   { to: "/topics", label: "灵感库", icon: IconBulb },
   { to: "/content", label: "内容中心", icon: IconClipboardList },
-  { to: "/douyin", label: "抖音数据", icon: IconBrandTiktok },
 ];
 
 export function AppShell({ children, onOpenSearch, sync }) {

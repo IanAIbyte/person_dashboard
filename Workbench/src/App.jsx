@@ -4,15 +4,12 @@ import { AppShell } from "./components/AppShell";
 import { DocumentDrawer } from "./components/DocumentDrawer";
 import { SearchPalette } from "./components/SearchPalette";
 import { CollectionPage } from "./pages/CollectionPage";
-import { DouyinPage } from "./pages/DouyinPage";
 import { DailyHotPage } from "./pages/DailyHotPage";
 import { GraphPage } from "./pages/GraphPage";
-import { MaterialsPage } from "./pages/MaterialsPage";
 import { BooksPage } from "./pages/BooksPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { SystemPage } from "./pages/SystemPage";
 import { TopicsPage } from "./pages/TopicsPage";
-import { SocialInsightsPage, SocialTrendDetailPage } from "./pages/SocialInsightsPage";
 import { CareerPage } from "./pages/CareerPage";
 import { StockWatchlistPage } from "./pages/StockWatchlistPage";
 import { useVaultSync } from "./hooks/useVaultSync";
@@ -26,10 +23,7 @@ export function App() {
   const [selectedDocumentId, setSelectedDocumentId] = useState(null);
   const [readerContext, setReaderContext] = useState(null);
   const vaultSync = useVaultSync(location.pathname);
-  const routeRevision =
-    location.pathname.startsWith("/social-insights")
-    ? location.pathname
-    : `${location.pathname}:${vaultSync.revision}`;
+  const routeRevision = `${location.pathname}:${vaultSync.revision}`;
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -89,46 +83,9 @@ export function App() {
               />
             }
           />
-          <Route
-            path="/materials"
-            element={<MaterialsPage onOpenDocument={openDocument} />}
-          />
           <Route path="/books" element={<BooksPage onOpenDocument={openDocument} />} />
           <Route path="/books/:bookId" element={<BooksPage onOpenDocument={openDocument} />} />
           <Route path="/daily-hot" element={<DailyHotPage />} />
-          {localWorkbench ? (
-            <Route
-              path="/social-insights"
-              element={
-                <SocialInsightsPage
-                  onOpenDocument={openDocument}
-                  syncRevision={vaultSync.revision}
-                />
-              }
-            />
-          ) : null}
-          {localWorkbench ? (
-            <Route
-              path="/social-insights/trends/:trendId"
-              element={
-                <SocialTrendDetailPage
-                  onOpenDocument={openDocument}
-                  syncRevision={vaultSync.revision}
-                />
-              }
-            />
-          ) : null}
-          {localWorkbench ? (
-            <Route
-              path="/social-insights/:reportId"
-              element={
-                <SocialInsightsPage
-                  onOpenDocument={openDocument}
-                  syncRevision={vaultSync.revision}
-                />
-              }
-            />
-          ) : null}
           {localWorkbench ? (
             <Route
               path="/career"
@@ -166,7 +123,6 @@ export function App() {
               />
             }
           />
-          <Route path="/douyin" element={<DouyinPage />} />
           <Route path="/system" element={<SystemPage />} />
           <Route path="*" element={<Navigate replace to="/" />} />
         </Routes>
