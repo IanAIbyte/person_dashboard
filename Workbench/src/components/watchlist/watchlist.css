@@ -843,7 +843,6 @@
   height: 100%;
   border-radius: var(--r-pill);
   background: linear-gradient(90deg, var(--accent-soft), var(--accent));
-  transition: width 0.5s var(--ease);
 }
 
 .watchlist-study__dim-comment {
@@ -1048,24 +1047,26 @@
 }
 
 .watchlist-study__watch {
-  border: 1px solid rgba(22, 163, 74, 0.25);
-  border-left: 3px solid var(--ok);
+  border: 1px solid var(--line);
   border-radius: var(--r-md);
   padding: 12px 14px;
-  background: rgba(22, 163, 74, 0.03);
-}
-
-.watchlist-study__watch--falsify {
-  border-color: rgba(220, 38, 38, 0.25);
-  border-left-color: var(--danger);
-  background: rgba(220, 38, 38, 0.03);
+  background: var(--surface);
 }
 
 .watchlist-study__watch-type {
+  display: inline-block;
   font-family: var(--font-mono);
   font-size: 10.5px;
   letter-spacing: 0.06em;
-  color: var(--ink-faint);
+  color: var(--ok);
+  background: rgba(22, 163, 74, 0.1);
+  border-radius: var(--r-pill);
+  padding: 2px 9px;
+}
+
+.watchlist-study__watch--falsify .watchlist-study__watch-type {
+  color: var(--danger);
+  background: rgba(220, 38, 38, 0.08);
 }
 
 .watchlist-study__watch p {
@@ -1224,6 +1225,204 @@
 
 .watchlist-review__verify em { color: var(--ink-faint); font-style: normal; }
 
+/* ===== 视图切换（清单 / 卡片） ===== */
+.watchlist-seg {
+  display: inline-flex;
+  gap: 2px;
+  background: var(--surface-sunken);
+  border-radius: var(--r-pill);
+  padding: 3px;
+}
+
+.watchlist-seg__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  border-radius: var(--r-pill);
+  padding: 5px 12px;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.2s var(--ease), color 0.2s var(--ease);
+}
+
+.watchlist-seg__btn:hover { color: var(--ink); }
+
+.watchlist-seg__btn--active {
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+/* ===== 链分组折叠 ===== */
+.watchlist-chain__head--toggle {
+  cursor: pointer;
+  user-select: none;
+  border-radius: var(--r-sm);
+  outline: none;
+  padding: 2px 4px;
+  margin: -2px -4px 16px;
+}
+
+.watchlist-chain__head--toggle:focus-visible {
+  outline: 2px solid var(--accent-soft);
+}
+
+.watchlist-chain__chevron {
+  color: var(--ink-faint);
+  transition: transform 0.2s var(--ease);
+}
+
+.watchlist-chain__chevron--collapsed { transform: rotate(-90deg); }
+
+.watchlist-chain--collapsed { padding: 14px 24px; }
+.watchlist-chain--collapsed .watchlist-chain__head--toggle { margin-bottom: 0; }
+
+.watchlist-chain--list { padding: 14px 16px; }
+.watchlist-chain--list .watchlist-chain__head--toggle { margin-bottom: 6px; }
+.watchlist-chain--list .watchlist-chain__title h2 { font-size: 16px; }
+
+/* ===== 清单视图：一行一股 ===== */
+/* ===== 清单模式整体密度 ===== */
+.page--watchlist-density {
+  gap: 14px;
+}
+
+.watchlist-list__head,
+.watchlist-list__row {
+  display: grid;
+  grid-template-columns: minmax(128px, 1.6fr) 72px 92px 84px minmax(108px, 1fr) 40px 48px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+}
+
+.watchlist-list__head {
+  height: 28px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.watchlist-list__head span:nth-child(3),
+.watchlist-list__head span:nth-child(4),
+.watchlist-list__row .watchlist-list__price,
+.watchlist-list__row .watchlist-list__pct {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.watchlist-list__row {
+  height: 38px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  transition: background 0.15s var(--ease);
+  border-radius: var(--r-sm);
+}
+
+.watchlist-list__row:hover { background: var(--surface-sunken); }
+
+.watchlist-list__row:focus-visible {
+  outline: 2px solid var(--accent-soft);
+  outline-offset: -2px;
+}
+
+.watchlist-list__row:last-child { border-bottom: none; }
+
+.watchlist-list__name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.watchlist-list__row:hover .watchlist-list__name { color: var(--accent-strong); }
+
+.watchlist-list__code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.watchlist-list__code--none { color: var(--warn); }
+
+.watchlist-list__price {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.watchlist-list__pct { font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; }
+.watchlist-list__pct--up { color: var(--danger); }
+.watchlist-list__pct--down { color: var(--ok); }
+.watchlist-list__pct--flat { color: var(--ink-soft); }
+
+.watchlist-list__verdict .watchlist-badge { margin-left: 0; }
+
+.watchlist-list__none { font-size: 12px; color: var(--ink-faint); }
+
+.watchlist-list__star {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--r-sm);
+  transition: color 0.2s var(--ease);
+}
+
+.watchlist-list__star:hover { color: var(--accent-strong); }
+.watchlist-list__star--on { color: var(--accent); }
+
+.watchlist-list__go { font-size: 12px; color: var(--accent-strong); opacity: 0; transition: opacity 0.15s var(--ease); }
+.watchlist-list__row:hover .watchlist-list__go,
+.watchlist-list__row:focus-visible .watchlist-list__go { opacity: 1; }
+
+/* ===== 复盘折叠区 ===== */
+.watchlist-review { padding: 16px 24px; }
+
+.watchlist-review__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--r-sm);
+  outline: none;
+}
+
+.watchlist-review__toggle:focus-visible { outline: 2px solid var(--accent-soft); }
+
+.watchlist-review__toggle h2 { margin: 0; font-family: var(--font-display); font-size: 16px; color: var(--ink); }
+
+.watchlist-review__state {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  color: var(--accent-strong);
+  background: var(--accent-wash);
+  border-radius: var(--r-pill);
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+
+.watchlist-review--open .watchlist-review__head { margin-bottom: 14px; }
+
+.watchlist-review__idle { margin: 0; font-size: 13px; color: var(--ink-faint); line-height: 1.6; }
+
 @media (max-width: 640px) {
   .watchlist-study__debate {
     grid-template-columns: 1fr;
@@ -1231,6 +1430,29 @@
 
   .watchlist-study__levels {
     grid-template-columns: 1fr;
+  }
+
+  .watchlist-list__head,
+  .watchlist-list__row {
+    grid-template-columns: minmax(96px, 1.5fr) 68px 62px 32px;
+    gap: 6px;
+    padding: 0 8px;
+  }
+
+  /* 触屏优先级：留名称(含评级信号灯)/现价/涨跌/星标；
+     代码、评级文字、「详情」提示隐藏，整行可点开研究台 */
+  .watchlist-list__head span:nth-child(2),
+  .watchlist-list__row .watchlist-list__code,
+  .watchlist-list__head span:nth-child(5),
+  .watchlist-list__row .watchlist-list__verdict,
+  .watchlist-list__head span:nth-child(7),
+  .watchlist-list__row .watchlist-list__go {
+    display: none;
+  }
+
+  .watchlist-toolbar__actions {
+    flex-wrap: wrap;
+    row-gap: 10px;
   }
 }
 
