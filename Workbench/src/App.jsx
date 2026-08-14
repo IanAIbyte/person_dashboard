@@ -112,17 +112,6 @@ export function App() {
             path="/topics"
             element={<TopicsPage onOpenDocument={openDocument} />}
           />
-          <Route
-            path="/content"
-            element={
-              <CollectionPage
-                kind="content"
-                eyebrow="CONTENT PIPELINE"
-                title="内容中心"
-                onOpenDocument={openDocument}
-              />
-            }
-          />
           <Route path="/system" element={<SystemPage />} />
           <Route path="*" element={<Navigate replace to="/" />} />
         </Routes>

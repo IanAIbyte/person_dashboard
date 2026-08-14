@@ -236,13 +236,6 @@ export function OverviewPage({ onOpenDocument }) {
                   生产动态
                 </h2>
               </div>
-              <button
-                className="graph-filter"
-                onClick={() => navigate("/content")}
-                type="button"
-              >
-                内容中心
-              </button>
             </div>
             <div className="pipeline">
               {activity.length === 0 ? (

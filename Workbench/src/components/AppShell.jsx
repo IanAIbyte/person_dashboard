@@ -5,7 +5,6 @@ import {
   IconBriefcase,
   IconBulb,
   IconChartCandle,
-  IconClipboardList,
   IconCommand,
   IconHome,
   IconLibrary,
@@ -32,7 +31,6 @@ const primaryNavigation = [
     ? [{ to: "/stocks", label: "重点个股", icon: IconChartCandle }]
     : []),
   { to: "/topics", label: "灵感库", icon: IconBulb },
-  { to: "/content", label: "内容中心", icon: IconClipboardList },
 ];
 
 export function AppShell({ children, onOpenSearch, sync }) {
