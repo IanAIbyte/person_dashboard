@@ -8,6 +8,8 @@ import {
   IconChartCandle,
   IconCommand,
   IconHome,
+  IconLayoutSidebarLeftCollapse,
+  IconLayoutSidebarLeftExpand,
   IconLibrary,
   IconMenu2,
   IconRadar2,
@@ -60,13 +62,41 @@ function saveNavOrder(items) {
   }
 }
 
+// 侧栏收缩状态持久化（仅桌面端语义；移动端抽屉不受影响）。
+const SIDEBAR_COLLAPSED_KEY = "workbench.sidebar-collapsed.v1";
+
+function loadSidebarCollapsed() {
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function saveSidebarCollapsed(collapsed) {
+  try {
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
+  } catch {
+    // 写入失败时静默降级。
+  }
+}
+
 export function AppShell({ children, onOpenSearch, sync }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [navItems, setNavItems] = useState(() => loadNavOrder(primaryNavigation));
+  const [collapsed, setCollapsed] = useState(() => loadSidebarCollapsed());
 
   const handleNavReorder = (next) => {
     setNavItems(next);
     saveNavOrder(next);
+  };
+
+  const toggleCollapsed = () => {
+    setCollapsed((current) => {
+      const next = !current;
+      saveSidebarCollapsed(next);
+      return next;
+    });
   };
 
   useEffect(() => {
@@ -79,7 +109,7 @@ export function AppShell({ children, onOpenSearch, sync }) {
   }, [mobileOpen]);
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${collapsed ? " app-shell--sidebar-collapsed" : ""}`}>
       <header className="mobile-header">
         <button
           aria-label="打开导航"
@@ -112,13 +142,33 @@ export function AppShell({ children, onOpenSearch, sync }) {
         />
       ) : null}
 
-      <aside className={`sidebar${mobileOpen ? " sidebar--open" : ""}`}>
+      <aside
+        className={`sidebar${mobileOpen ? " sidebar--open" : ""}${collapsed ? " sidebar--collapsed" : ""}`}
+      >
         <div className="sidebar__top">
           <div className="sidebar__brand-row">
-            <NavLink className="sidebar__brand" onClick={() => setMobileOpen(false)} to="/">
+            <NavLink
+              className="sidebar__brand"
+              onClick={() => setMobileOpen(false)}
+              title={collapsed ? "司南工作台" : undefined}
+              to="/"
+            >
               <img alt="" aria-hidden="true" src="/workbench-mark.svg" />
               <span>司南工作台</span>
             </NavLink>
+            <button
+              aria-label={collapsed ? "展开侧栏" : "收缩侧栏"}
+              className="icon-button sidebar__collapse"
+              onClick={toggleCollapsed}
+              title={collapsed ? "展开侧栏" : "收缩侧栏"}
+              type="button"
+            >
+              {collapsed ? (
+                <IconLayoutSidebarLeftExpand aria-hidden="true" />
+              ) : (
+                <IconLayoutSidebarLeftCollapse aria-hidden="true" />
+              )}
+            </button>
             <button
               aria-label="关闭导航"
               className="icon-button sidebar__close"
@@ -141,25 +191,26 @@ export function AppShell({ children, onOpenSearch, sync }) {
             {navItems.map((item) => {
               const Icon = item.icon;
               return (
-                <Reorder.Item
-                  as="div"
-                  key={item.to}
-                  value={item}
-                  style={{ position: "relative", zIndex: 1 }}
-                >
-                  <NavLink
-                    className={({ isActive }) =>
-                      `sidebar__nav-item${isActive ? " sidebar__nav-item--active" : ""}`
-                    }
-                    draggable={false}
-                    end={item.end}
-                    onClick={() => setMobileOpen(false)}
-                    to={item.to}
+                  <Reorder.Item
+                    as="div"
+                    key={item.to}
+                    value={item}
+                    style={{ position: "relative", zIndex: 1 }}
                   >
-                    <Icon aria-hidden="true" className="sidebar__nav-icon" stroke={1.7} />
-                    <span>{item.label}</span>
-                  </NavLink>
-                </Reorder.Item>
+                    <NavLink
+                      className={({ isActive }) =>
+                        `sidebar__nav-item${isActive ? " sidebar__nav-item--active" : ""}`
+                      }
+                      draggable={false}
+                      end={item.end}
+                      onClick={() => setMobileOpen(false)}
+                      title={collapsed ? item.label : undefined}
+                      to={item.to}
+                    >
+                      <Icon aria-hidden="true" className="sidebar__nav-icon" stroke={1.7} />
+                      <span>{item.label}</span>
+                    </NavLink>
+                  </Reorder.Item>
               );
             })}
           </Reorder.Group>
@@ -173,6 +224,7 @@ export function AppShell({ children, onOpenSearch, sync }) {
           <NavLink
             className="sidebar__settings"
             onClick={() => setMobileOpen(false)}
+            title={collapsed ? "系统状态" : undefined}
             to="/system"
           >
             <IconSettings aria-hidden="true" stroke={1.6} />

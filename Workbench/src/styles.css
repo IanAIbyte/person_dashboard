@@ -835,6 +835,59 @@ h3 {
   display: none;
 }
 
+/* 桌面端侧栏收缩/展开按钮（移动端隐藏，用抽屉关闭按钮） */
+.sidebar__collapse {
+  display: inline-flex;
+}
+
+/* 收缩态：覆盖 --sidebar-w 让 sidebar 宽与主区边距同步收窄 */
+.app-shell--sidebar-collapsed {
+  --sidebar-w: 68px;
+}
+
+.sidebar--collapsed {
+  padding: 20px 10px 16px;
+}
+
+.sidebar--collapsed .sidebar__brand-row {
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebar--collapsed .sidebar__brand {
+  justify-content: center;
+  padding: 0;
+}
+
+.sidebar--collapsed .sidebar__brand span,
+.sidebar--collapsed .sidebar__tag,
+.sidebar--collapsed .sidebar__nav-item span,
+.sidebar--collapsed .sidebar__settings span {
+  display: none;
+}
+
+.sidebar--collapsed .sidebar__nav-item {
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.sidebar--collapsed .sidebar__nav-icon {
+  margin: 0;
+}
+
+.sidebar--collapsed .sidebar__settings {
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.sidebar--collapsed .sidebar__sync {
+  justify-content: center;
+}
+
+.sidebar--collapsed .sidebar__sync span:last-child {
+  display: none;
+}
+
 .sidebar-backdrop {
   display: none;
 }
@@ -2216,6 +2269,48 @@ h3 {
     transform: translateX(-100%);
     transition: transform 0.25s var(--ease);
     box-shadow: none;
+    /* 移动端抽屉始终全宽，不受桌面收缩态影响 */
+    width: 244px;
+    padding: 26px 18px 22px;
+  }
+
+  .sidebar__collapse {
+    display: none;
+  }
+
+  .sidebar--collapsed .sidebar__brand-row {
+    flex-direction: row;
+  }
+
+  .sidebar--collapsed .sidebar__brand span {
+    display: inline;
+  }
+
+  .sidebar--collapsed .sidebar__tag {
+    display: block;
+  }
+
+  .sidebar--collapsed .sidebar__nav-item {
+    justify-content: flex-start;
+    padding: 10px 12px;
+  }
+
+  .sidebar--collapsed .sidebar__nav-item span,
+  .sidebar--collapsed .sidebar__settings span {
+    display: inline;
+  }
+
+  .sidebar--collapsed .sidebar__settings {
+    justify-content: flex-start;
+    padding: 10px 12px;
+  }
+
+  .sidebar--collapsed .sidebar__sync {
+    justify-content: flex-start;
+  }
+
+  .sidebar--collapsed .sidebar__sync span:last-child {
+    display: inline;
   }
 
   .sidebar--open {
