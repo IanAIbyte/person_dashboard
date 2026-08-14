@@ -566,6 +566,40 @@ export function startStockSentiment(payload) {
   });
 }
 
+export function startStockResearch(payload) {
+  return request("/api/stock-analysis/research", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function loadStockResearch() {
+  return withFallback(
+    () => cachedGet("/api/stock-research"),
+    { updatedAt: null, total: 0, reports: [] },
+  );
+}
+
+export function saveStockResearch(name, { generatedAt, report }) {
+  return request(`/api/stock-research/${encodeURIComponent(name)}`, {
+    method: "PUT",
+    body: JSON.stringify({ generatedAt, report }),
+  }).then((result) => {
+    invalidateCache("/api/stock-research");
+    return result;
+  });
+}
+
+export function deleteStockResearch(name) {
+  return request(`/api/stock-research/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+    body: JSON.stringify({}),
+  }).then((result) => {
+    invalidateCache("/api/stock-research");
+    return result;
+  });
+}
+
 export function startStockReview(stocks) {
   return request("/api/stock-analysis/review", {
     method: "POST",

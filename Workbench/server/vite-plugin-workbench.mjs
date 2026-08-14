@@ -36,6 +36,10 @@ import {
   STOCK_WATCHLIST_PATH,
   createStockWatchlistRepository,
 } from "./stock-watchlist.mjs";
+import {
+  STOCK_RESEARCH_PATH,
+  createStockResearchRepository,
+} from "./stock-research.mjs";
 import { createLlmClient } from "./llm-client.mjs";
 import { createMarketDataService } from "./market-data.mjs";
 import { createStockNewsService } from "./stock-news.mjs";
@@ -807,6 +811,7 @@ export function workbenchApiPlugin({
   const materialReadingState = createMaterialReadingStateRepository({ vaultRoot });
   const stockWatchlist = createStockWatchlistRepository({ vaultRoot });
   const stockCodes = createStockCodesRepository({ vaultRoot });
+  const stockResearch = createStockResearchRepository({ vaultRoot });
   const llmClient = createLlmClient({
     apiKey: zhipuApiKey,
     ...(zhipuBaseUrl ? { baseUrl: zhipuBaseUrl } : {}),
@@ -1691,6 +1696,40 @@ export function workbenchApiPlugin({
             return json(res, 200, { removed });
           }
 
+          if (req.method === "GET" && url.pathname === "/api/stock-research") {
+            const research = await stockResearch.list();
+            return json(res, 200, {
+              updatedAt: research.updatedAt,
+              total: research.reports.length,
+              reports: research.reports,
+            });
+          }
+
+          const stockResearchMatch = url.pathname.match(
+            /^\/api\/stock-research\/([^/]+)$/,
+          );
+          if (req.method === "PUT" && stockResearchMatch) {
+            const name = decodeURIComponent(stockResearchMatch[1]);
+            const body = await readJson(req, 512 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["generatedAt", "report"]),
+              "INVALID_STOCK_RESEARCH_REQUEST",
+            );
+            const entry = await stockResearch.save(name, {
+              generatedAt: body.generatedAt,
+              report: body.report,
+            });
+            vaultSync.notifyPaths([STOCK_RESEARCH_PATH]);
+            return json(res, 200, entry);
+          }
+          if (req.method === "DELETE" && stockResearchMatch) {
+            const name = decodeURIComponent(stockResearchMatch[1]);
+            const removed = await stockResearch.remove(name);
+            if (removed) vaultSync.notifyPaths([STOCK_RESEARCH_PATH]);
+            return json(res, 200, { removed });
+          }
+
           if (req.method === "GET" && url.pathname === "/api/market/quotes") {
             const codes = url.searchParams.getAll("codes");
             const quotes = await marketData.getQuotes(codes);
@@ -1714,6 +1753,22 @@ export function workbenchApiPlugin({
               "INVALID_STOCK_ANALYSIS_REQUEST",
             );
             const task = await stockAnalysis.startSentiment({
+              name: body.name,
+              note: body.note ?? null,
+              code: body.code ?? null,
+              entityContent: body.entityContent ?? null,
+            });
+            return json(res, 202, task);
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/stock-analysis/research") {
+            const body = await readJson(req, 64 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["name", "note", "code", "entityContent"]),
+              "INVALID_STOCK_ANALYSIS_REQUEST",
+            );
+            const task = await stockAnalysis.startResearch({
               name: body.name,
               note: body.note ?? null,
               code: body.code ?? null,
