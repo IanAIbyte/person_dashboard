@@ -384,16 +384,6 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
             <input type="checkbox" checked={onlyResearched} onChange={(e) => setOnlyResearched(e.target.checked)} />
             <span>只看有档案</span>
           </label>
-          {sortChain.length > 0 ? (
-            <button
-              type="button"
-              className="watchlist-refresh"
-              onClick={resetSort}
-              title="清空排序，恢复池自然顺序"
-            >
-              <IconArrowsSort size={16} stroke={1.7} /> 重置排序
-            </button>
-          ) : null}
           <button
             type="button"
             className="watchlist-refresh"
@@ -496,7 +486,19 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
                 })}
                 <span>研究评级</span>
                 <span />
-                <span />
+                {sortChain.length > 0 ? (
+                  <button
+                    type="button"
+                    className="watchlist-list__sort-reset"
+                    onClick={resetSort}
+                    aria-label="清空排序，恢复池自然顺序"
+                    title="清空排序，恢复池自然顺序"
+                  >
+                    <IconArrowsSort size={14} stroke={1.7} />
+                  </button>
+                ) : (
+                  <span />
+                )}
               </div>
               {displayStocks.map((stock) => (
                 <StockRow

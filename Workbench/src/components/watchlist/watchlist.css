@@ -1397,6 +1397,26 @@
 
 .watchlist-list__th--active { color: var(--accent-strong); }
 
+/* 表头行末（操作列位）：清空排序的小图标，仅在存在生效排序时出现 */
+.watchlist-list__sort-reset {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: var(--r-sm);
+  transition: color 0.2s var(--ease), background 0.2s var(--ease);
+}
+
+.watchlist-list__sort-reset:hover {
+  color: var(--accent-strong);
+  background: var(--accent-wash);
+}
+
 .watchlist-list__th-arrow { margin-left: 2px; }
 
 /* 多列排序的优先级序号 */
@@ -1586,7 +1606,8 @@
   .watchlist-list__head span:nth-child(5),
   .watchlist-list__row .watchlist-list__verdict,
   .watchlist-list__head span:nth-child(7),
-  .watchlist-list__row .watchlist-list__go {
+  .watchlist-list__row .watchlist-list__go,
+  .watchlist-list__sort-reset {
     display: none;
   }
 
