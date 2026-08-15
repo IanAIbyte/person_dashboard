@@ -1381,7 +1381,10 @@
   white-space: nowrap;
 }
 
-.watchlist-list__th:first-child { text-align: left; }
+/* 文字列表头（公司/代码/板块）左对齐，与数据单元格一致；数字列右对齐 */
+.watchlist-list__th:first-child,
+.watchlist-list__th:nth-child(2),
+.watchlist-list__th:nth-child(3) { text-align: left; }
 
 .watchlist-list__th--active { color: var(--accent-strong); }
 

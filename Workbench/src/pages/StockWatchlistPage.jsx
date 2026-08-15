@@ -32,7 +32,6 @@ import {
   saveStockResearch,
   setStockCode,
   startStockResearch,
-  startStockReview,
   testWatchdogPush,
   unfollowStock,
   updateStockMeta,
@@ -595,12 +594,6 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
 
       <AlertsPanel />
       <WatchdogPanel />
-
-      <ReviewPanel
-        stocks={allStocks.filter((s) => followed.has(s.name))}
-        quotes={quotes}
-        research={research}
-      />
     </div>
   );
 }
@@ -626,9 +619,6 @@ function StockRow({ stock, quote, isFollowed, researchEntry, onOpenDetail, onTog
       }}
     >
       <span className="watchlist-list__name">
-        {researchEntry ? (
-          <span className={`watchlist-verdict-dot watchlist-verdict-dot--${tone}`} title={`研究评级：${verdict ?? "见档案"}`} />
-        ) : null}
         {stock.name}
         {stock.custom ? <span className="watchlist-list__custom-tag">自选</span> : null}
       </span>
@@ -1155,89 +1145,6 @@ function StockResearchDrawer({ stock, quote, meta, researchEntry, reduceMotion, 
   );
 }
 
-function ReviewPanel({ stocks, quotes, research }) {
-  const [task, setTask] = useState(null);
-  const [open, setOpen] = useState(false);
-
-  if (stocks.length === 0) return null;
-
-  const runReview = async () => {
-    setOpen(true);
-    setTask({ status: "running" });
-    const payload = stocks.map((s) => ({
-      name: s.name,
-      code: s.code,
-      note: s.note,
-      monitor: research.get(s.name)?.report?.monitor ?? [],
-    }));
-    const started = await startStockReview(payload);
-    const id = started?.id;
-    const poll = async () => {
-      const result = await getStockAnalysis(id);
-      if (result?.status === "completed") setTask({ status: "done", data: result.result });
-      else if (result?.status === "failed") setTask({ status: "failed", error: result.error });
-      else setTimeout(poll, 2000);
-    };
-    poll();
-  };
-
-  return (
-    <div className={`watchlist-review${open ? " watchlist-review--open" : ""}`}>
-      <div className="watchlist-review__head">
-        <button
-          type="button"
-          className="watchlist-review__toggle"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-        >
-          <IconChevronDown size={16} stroke={1.7} className={`watchlist-chain__chevron${open ? "" : " watchlist-chain__chevron--collapsed"}`} />
-          <h2>AI 每日复盘与验证节点</h2>
-          {task?.status === "done" && task.data ? (
-            <span className="watchlist-review__state">已生成 · {task.data.stockCount ?? stocks.length} 只</span>
-          ) : null}
-          {task?.status === "running" ? <span className="watchlist-review__state">生成中…</span> : null}
-        </button>
-        {open ? (
-          <button type="button" onClick={runReview} disabled={task?.status === "running"}>
-            <IconSparkles size={16} /> {task?.status === "running" ? "生成中…" : "生成复盘"}
-          </button>
-        ) : null}
-      </div>
-      {open ? (
-        <div className="watchlist-review__body">
-          {task?.status === "done" && task.data ? (
-            <>
-              <p className="watchlist-review__overview">{task.data.overview}</p>
-              {task.data.notable?.length ? <div><h4>值得注意</h4><ul>{task.data.notable.map((n, i) => <li key={i}>{n}</li>)}</ul></div> : null}
-              {task.data.risks?.length ? <div><h4>风险提示</h4><ul>{task.data.risks.map((n, i) => <li key={i}>{n}</li>)}</ul></div> : null}
-              {task.data.actions?.length ? <div><h4>后续跟踪</h4><ul>{task.data.actions.map((n, i) => <li key={i}>{n}</li>)}</ul></div> : null}
-              {task.data.verifications?.length ? (
-                <div>
-                  <h4>验证节点</h4>
-                  <ul className="watchlist-review__verify">
-                    {task.data.verifications.map((v, i) => (
-                      <li key={i} className={v?.type === "falsify" ? "watchlist-review__verify-item--falsify" : undefined}>
-                        <strong>{v?.stock}</strong>
-                        <span className="watchlist-review__verify-type">{v?.type === "falsify" ? "证伪" : "强化"}</span>
-                        {v?.event}
-                        {v?.note ? <em>—— {v.note}</em> : null}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <p className="watchlist-review__idle">收盘后基于关注股行情与监控清单生成当日复盘；验证节点按「强化 / 证伪」归类汇总。</p>
-          )}
-          {task?.status === "failed" ? (
-            <div className="watchlist-review__error">{task.error}</div>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}
 
 // ===== 监控台 v2 组件：实时基本面块 / 异动中心 / 盯盘配置 / 添加自选 =====
 
