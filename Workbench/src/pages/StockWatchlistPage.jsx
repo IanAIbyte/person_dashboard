@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import {
   IconAlertTriangle,
-  IconChevronDown,
+  IconArrowsSort,
   IconLayoutGrid,
   IconList,
   IconPlus,
@@ -80,7 +80,6 @@ function stanceTone(stance) {
 let watchlistEntranceDone = false;
 
 const VIEW_STORAGE_KEY = "workbench.watchlist-view.v1";
-const COLLAPSED_STORAGE_KEY = "workbench.watchlist-collapsed.v1";
 const CHAIN_TAB_STORAGE_KEY = "workbench.watchlist-chain.v1";
 
 const STUDY_TABS = [
@@ -99,15 +98,6 @@ function loadStoredView() {
   }
 }
 
-function loadStoredCollapsed() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(COLLAPSED_STORAGE_KEY) ?? "[]");
-    return new Set(Array.isArray(raw) ? raw.filter((v) => typeof v === "string") : []);
-  } catch {
-    return new Set();
-  }
-}
-
 export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
   const reduceMotion = useReducedMotion();
   const [universe, setUniverse] = useState({ data: null, source: "loading", error: null });
@@ -116,10 +106,9 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
   const [quotes, setQuotes] = useState(() => new Map()); // code -> quote
   const [onlyFollowed, setOnlyFollowed] = useState(false);
   const [onlyResearched, setOnlyResearched] = useState(false);
-  const [sortKey, setSortKey] = useState("chain"); // chain 为默认（链内自然顺序），其余为列头排序字段
-  const [sortDir, setSortDir] = useState(1); // 1 升序 / -1 降序
+  // 多列排序链：[{ key, dir }]，空数组 = 池自然顺序。Shift+点击追加/翻转，单击重置单列。
+  const [sortChain, setSortChain] = useState(() => []);
   const [viewMode, setViewMode] = useState(loadStoredView); // list（默认，扫描密度）| grid（卡片浏览）
-  const [collapsedChains, setCollapsedChains] = useState(loadStoredCollapsed); // chainLabel -> 收起
   const [activeChain, setActiveChain] = useState(() => {
     try { return localStorage.getItem(CHAIN_TAB_STORAGE_KEY) ?? "all"; } catch { return "all"; }
   }); // "all" | chainLabel，链 Tab 当前分组
@@ -133,21 +122,8 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
   }, [viewMode]);
 
   useEffect(() => {
-    try { localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify([...collapsedChains])); } catch { /* 同上 */ }
-  }, [collapsedChains]);
-
-  useEffect(() => {
     try { localStorage.setItem(CHAIN_TAB_STORAGE_KEY, activeChain); } catch { /* 同上 */ }
   }, [activeChain]);
-
-  const toggleChainCollapsed = useCallback((label) => {
-    setCollapsedChains((current) => {
-      const next = new Set(current);
-      if (next.has(label)) next.delete(label);
-      else next.add(label);
-      return next;
-    });
-  }, []);
 
   const refresh = useCallback(async () => {
     setUniverse((current) => ({ ...current, source: current.data ? current.source : "loading" }));
@@ -219,41 +195,39 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
     let list = allStocks;
     if (onlyFollowed) list = list.filter((s) => followed.has(s.name));
     if (onlyResearched) list = list.filter((s) => research.has(s.name));
-    if (sortKey !== "chain") {
+    if (sortChain.length > 0) {
       list = [...list].sort((a, b) => {
-        const va = sortValue(a, sortKey);
-        const vb = sortValue(b, sortKey);
-        // 缺失值沉底（不参与方向）。
-        if (va == null && vb == null) return 0;
-        if (va == null) return 1;
-        if (vb == null) return -1;
-        const cmp = typeof va === "number" && typeof vb === "number"
-          ? va - vb
-          : String(va).localeCompare(String(vb), "zh-CN");
-        return cmp * sortDir;
+        // 依次按排序链各列比较；缺失值统一沉底（不参与方向）。
+        for (const { key, dir } of sortChain) {
+          const va = sortValue(a, key);
+          const vb = sortValue(b, key);
+          if (va == null && vb == null) continue;
+          if (va == null) return 1;
+          if (vb == null) return -1;
+          const cmp = typeof va === "number" && typeof vb === "number"
+            ? va - vb
+            : String(va).localeCompare(String(vb), "zh-CN");
+          if (cmp !== 0) return cmp * dir;
+        }
+        return 0;
       });
     }
     return list;
-  }, [allStocks, onlyFollowed, onlyResearched, followed, research, sortKey, sortDir, sortValue]);
+  }, [allStocks, onlyFollowed, onlyResearched, followed, research, sortChain, sortValue]);
 
-  // 列头点击：同列翻转方向，异列重置降序（涨跌幅等倾向看大值在前）。
-  const applySort = useCallback((key) => {
-    if (key === sortKey) {
-      setSortDir((d) => -d);
-    } else {
-      setSortKey(key);
-      setSortDir(-1);
-    }
-  }, [sortKey]);
+  // 列头点击：单击重置为单列降序；Shift+点击追加到链尾（已在链中则翻转方向）。
+  const applySort = useCallback((key, additive) => {
+    setSortChain((current) => {
+      if (!additive) return [{ key, dir: -1 }];
+      const existing = current.find((c) => c.key === key);
+      if (existing) {
+        return current.map((c) => (c.key === key ? { ...c, dir: -c.dir } : c));
+      }
+      return [...current, { key, dir: -1 }];
+    });
+  }, []);
 
-  const visibleChains = useMemo(() => {
-    const groups = new Map();
-    for (const stock of visibleStocks) {
-      if (!groups.has(stock.chainLabel)) groups.set(stock.chainLabel, []);
-      groups.get(stock.chainLabel).push(stock);
-    }
-    return [...groups.entries()].map(([label, stocks]) => ({ label, stocks }));
-  }, [visibleStocks]);
+  const resetSort = useCallback(() => setSortChain([]), []);
 
   // 链 Tab 选项基于全量分组（不受「只看已关注/有档案」筛选影响），保证导航稳定。
   const chainTabOptions = useMemo(() => {
@@ -271,9 +245,14 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
   // 链 Tab 当前分组失效（数据变化）时回退「全部」。
   const activeChainValid = activeChain === "all" || chainTabOptions.some((t) => t.key === activeChain);
   const effectiveChain = activeChainValid ? activeChain : "all";
-  const displayChains = effectiveChain === "all"
-    ? visibleChains
-    : visibleChains.filter((chain) => chain.label === effectiveChain);
+
+  // 单一表格：链 Tab 只做筛选（不再分组渲染），排序/筛选后的行按序展示。
+  const displayStocks = useMemo(
+    () => (effectiveChain === "all"
+      ? visibleStocks
+      : visibleStocks.filter((s) => s.chainLabel === effectiveChain)),
+    [visibleStocks, effectiveChain],
+  );
 
   const totalFollowed = followed.size;
 
@@ -405,6 +384,16 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
             <input type="checkbox" checked={onlyResearched} onChange={(e) => setOnlyResearched(e.target.checked)} />
             <span>只看有档案</span>
           </label>
+          {sortChain.length > 0 ? (
+            <button
+              type="button"
+              className="watchlist-refresh"
+              onClick={resetSort}
+              title="清空排序，恢复池自然顺序"
+            >
+              <IconArrowsSort size={16} stroke={1.7} /> 重置排序
+            </button>
+          ) : null}
           <button
             type="button"
             className="watchlist-refresh"
@@ -458,122 +447,92 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
         />
       ) : null}
 
-      {displayChains.length === 0 && !isLoading ? (
+      {displayStocks.length === 0 && !isLoading ? (
         <div className="watchlist-empty">
           <p>{onlyFollowed || onlyResearched ? "当前筛选条件下暂无个股。" : "暂无个股数据。"}</p>
         </div>
       ) : null}
 
-      {displayChains.map((chain, chainIndex) => {
-        const chainFollowed = chain.stocks.filter((s) => followed.has(s.name)).length;
-        const isSolo = effectiveChain !== "all";
-        // 单链视图下分组信息已由链 Tab 承载：隐藏链头；且忽略折叠状态，
-        // 避免「全部」视图折叠后切入单链无头可点、清单被藏死。
-        const collapsed = !isSolo && collapsedChains.has(chain.label);
-        return (
-          <motion.section
-            key={chain.label}
-            className={`watchlist-chain${viewMode === "list" ? " watchlist-chain--list" : ""}${collapsed ? " watchlist-chain--collapsed" : ""}${isSolo ? " watchlist-chain--solo" : ""}`}
-            {...enter}
-            transition={{ ...enter.transition, delay: chainIndex * 0.05 }}
-          >
-            {isSolo ? null : (
-              <header
-                className="watchlist-chain__head watchlist-chain__head--toggle"
-                onClick={() => toggleChainCollapsed(chain.label)}
-                role="button"
-                tabIndex={0}
-                aria-expanded={!collapsed}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    toggleChainCollapsed(chain.label);
-                  }
-                }}
-              >
-                <div className="watchlist-chain__title">
-                  <IconChevronDown
-                    size={16}
-                    stroke={1.7}
-                    className={`watchlist-chain__chevron${collapsed ? " watchlist-chain__chevron--collapsed" : ""}`}
-                  />
-                  <h2>{chain.label}</h2>
-                </div>
-                <div className="watchlist-chain__meta">
-                  <span className="watchlist-chain__count">{chain.stocks.length} 只</span>
-                  <span className="watchlist-chain__count">{chainFollowed} 关注</span>
-                </div>
-              </header>
-            )}
-
-            {collapsed ? null : viewMode === "list" ? (
-              <div className="watchlist-list">
-                <div className="watchlist-list__head" role="row">
-                  {[
-                    ["name", "公司", true],
-                    ["code", "代码", true],
-                    ["board", "板块", true],
-                    ["price", "现价", false],
-                    ["pct", "涨跌幅", false],
-                    ["turnover", "换手", false],
-                    ["volumeRatio", "量比", false],
-                    ["pe", "PE", false],
-                    ["pb", "PB", false],
-                  ].map(([key, label, sortableLeft]) => (
+      {displayStocks.length > 0 ? (
+        <motion.section
+          className={`watchlist-chain${viewMode === "list" ? " watchlist-chain--list" : ""}`}
+          {...enter}
+        >
+          {viewMode === "list" ? (
+            <div className="watchlist-list">
+              <div className="watchlist-list__head" role="row">
+                {[
+                  ["name", "公司"],
+                  ["code", "代码"],
+                  ["chainLabel", "国产链/海外链"],
+                  ["board", "板块"],
+                  ["price", "现价"],
+                  ["pct", "涨跌幅"],
+                  ["turnover", "换手"],
+                  ["volumeRatio", "量比"],
+                  ["pe", "PE"],
+                  ["pb", "PB"],
+                ].map(([key, label]) => {
+                  const order = sortChain.findIndex((c) => c.key === key);
+                  const entry = order >= 0 ? sortChain[order] : null;
+                  return (
                     <button
                       key={key}
                       type="button"
-                      className={`watchlist-list__th${sortKey === key ? " watchlist-list__th--active" : ""}`}
-                      onClick={() => applySort(key)}
-                      aria-label={`按${label}排序`}
-                      title={`按${label}排序`}
+                      className={`watchlist-list__th${entry ? " watchlist-list__th--active" : ""}`}
+                      onClick={(e) => applySort(key, e.shiftKey)}
+                      aria-label={`按${label}排序（Shift+点击追加排序）`}
+                      title={`按${label}排序（Shift+点击追加排序）`}
                     >
                       {label}
-                      {sortKey === key ? (
-                        <span className="watchlist-list__th-arrow">{sortDir > 0 ? "↑" : "↓"}</span>
+                      {entry ? (
+                        <span className="watchlist-list__th-arrow">
+                          {entry.dir > 0 ? "↑" : "↓"}
+                          {sortChain.length > 1 ? <sub>{order + 1}</sub> : null}
+                        </span>
                       ) : null}
                     </button>
-                  ))}
-                  <span>研究评级</span>
-                  <span />
-                  <span />
-                </div>
-                {chain.stocks.map((stock) => (
-                  <StockRow
-                    key={stock.name}
-                    stock={stock}
-                    quote={quotes.get(stock.code)}
-                    isFollowed={followed.has(stock.name)}
-                    researchEntry={research.get(stock.name)}
-                    onOpenDetail={() => setDetailName(stock.name)}
-                    onToggleFollow={() => toggleFollow(stock.name)}
-                    onRemoveCustom={stock.custom ? () => removeCustomStock(stock.name) : null}
-                  />
-                ))}
+                  );
+                })}
+                <span>研究评级</span>
+                <span />
+                <span />
               </div>
-            ) : (
-              <div className="watchlist-grid">
-                {chain.stocks.map((stock) => (
-                  <StockCard
-                    key={stock.name}
-                    stock={stock}
-                    isFollowed={followed.has(stock.name)}
-                    researchEntry={research.get(stock.name)}
-                    quote={quotes.get(stock.code)}
-                    isSelected={selected.has(stock.name)}
-                    codeDraft={codesDraft.get(stock.name)}
-                    onToggleFollow={() => toggleFollow(stock.name)}
-                    onToggleSelect={() => toggleSelect(stock.name)}
-                    onOpenDetail={() => setDetailName(stock.name)}
-                    onCodeDraft={(v) => setCodesDraft((c) => new Map(c).set(stock.name, v))}
-                    onSaveCode={() => saveCode(stock.name)}
-                  />
-                ))}
-              </div>
-            )}
-          </motion.section>
-        );
-      })}
+              {displayStocks.map((stock) => (
+                <StockRow
+                  key={stock.name}
+                  stock={stock}
+                  quote={quotes.get(stock.code)}
+                  isFollowed={followed.has(stock.name)}
+                  researchEntry={research.get(stock.name)}
+                  onOpenDetail={() => setDetailName(stock.name)}
+                  onToggleFollow={() => toggleFollow(stock.name)}
+                  onRemoveCustom={stock.custom ? () => removeCustomStock(stock.name) : null}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="watchlist-grid">
+              {displayStocks.map((stock) => (
+                <StockCard
+                  key={stock.name}
+                  stock={stock}
+                  isFollowed={followed.has(stock.name)}
+                  researchEntry={research.get(stock.name)}
+                  quote={quotes.get(stock.code)}
+                  isSelected={selected.has(stock.name)}
+                  codeDraft={codesDraft.get(stock.name)}
+                  onToggleFollow={() => toggleFollow(stock.name)}
+                  onToggleSelect={() => toggleSelect(stock.name)}
+                  onOpenDetail={() => setDetailName(stock.name)}
+                  onCodeDraft={(v) => setCodesDraft((c) => new Map(c).set(stock.name, v))}
+                  onSaveCode={() => saveCode(stock.name)}
+                />
+              ))}
+            </div>
+          )}
+        </motion.section>
+      ) : null}
 
       {detailName ? (
         <StockResearchDrawer
@@ -625,6 +584,7 @@ function StockRow({ stock, quote, isFollowed, researchEntry, onOpenDetail, onTog
       <span className={`watchlist-list__code${stock.code ? "" : " watchlist-list__code--none"}`}>
         {stock.code ?? "无代码"}
       </span>
+      <span className="watchlist-list__chain">{stock.chainLabel ?? "—"}</span>
       <span className="watchlist-list__board">{stock.board ?? (stock.custom ? "自选" : "—")}</span>
       <span className="watchlist-list__price">{formatPrice(quote?.price)}</span>
       <span className={`watchlist-list__pct watchlist-list__pct--${pctClass}`}>{formatPct(pct)}</span>

@@ -1341,7 +1341,7 @@
   gap: 12px;
 }
 
-/* ===== 清单视图：一行一股。12 数据列需足宽，窄视口横向滚动 ===== */
+/* ===== 清单视图：一行一股。13 数据列需足宽，窄视口横向滚动 ===== */
 .watchlist-list {
   display: grid;
   grid-template-columns: 1fr;
@@ -1351,11 +1351,11 @@
 .watchlist-list__head,
 .watchlist-list__row {
   display: grid;
-  grid-template-columns: minmax(130px, 1.8fr) 64px 60px 72px 74px 54px 50px 56px 52px minmax(76px, 1fr) 36px 44px;
+  grid-template-columns: minmax(130px, 1.7fr) 64px 56px 60px 72px 74px 54px 50px 56px 52px minmax(72px, 1fr) 36px 44px;
   align-items: center;
   gap: 6px;
   padding: 0 12px;
-  min-width: 940px;
+  min-width: 1010px;
 }
 
 .watchlist-list__head {
@@ -1381,14 +1381,28 @@
   white-space: nowrap;
 }
 
-/* 文字列表头（公司/代码/板块）左对齐，与数据单元格一致；数字列右对齐 */
+/* 文字列表头（公司/代码/链/板块）左对齐，与数据单元格一致；数字列右对齐 */
 .watchlist-list__th:first-child,
 .watchlist-list__th:nth-child(2),
-.watchlist-list__th:nth-child(3) { text-align: left; }
+.watchlist-list__th:nth-child(3),
+.watchlist-list__th:nth-child(4) { text-align: left; }
 
 .watchlist-list__th--active { color: var(--accent-strong); }
 
 .watchlist-list__th-arrow { margin-left: 2px; }
+
+/* 多列排序的优先级序号 */
+.watchlist-list__th-arrow sub {
+  font-size: 8px;
+  margin-left: 1px;
+  color: var(--accent-strong);
+}
+
+.watchlist-list__chain {
+  font-size: 12px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
 
 .watchlist-list__row .watchlist-list__price,
 .watchlist-list__row .watchlist-list__pct,
