@@ -5,6 +5,7 @@ import {
   IconChevronDown,
   IconLayoutGrid,
   IconList,
+  IconPlus,
   IconRefresh,
   IconSparkles,
   IconStar,
@@ -14,19 +15,28 @@ import {
 
 import { PageHeader } from "../components/PageHeader";
 import {
+  addStockPoolItem,
   followStock,
   getStockAnalysis,
   loadMarketQuotes,
+  loadStockAlerts,
+  loadStockFinancials,
   loadStockNews,
+  loadStockPool,
   loadStockResearch,
-  loadStockUniverse,
+  loadStockTechnicals,
   loadStockWatchlist,
+  loadValuationHistory,
+  loadWatchdogConfig,
+  removeStockPoolItem,
   saveStockResearch,
   setStockCode,
   startStockResearch,
   startStockReview,
+  testWatchdogPush,
   unfollowStock,
   updateStockMeta,
+  updateWatchdogConfig,
 } from "../lib/api";
 import "../components/watchlist/watchlist.css";
 
@@ -107,7 +117,8 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
   const [quotes, setQuotes] = useState(() => new Map()); // code -> quote
   const [onlyFollowed, setOnlyFollowed] = useState(false);
   const [onlyResearched, setOnlyResearched] = useState(false);
-  const [sortKey, setSortKey] = useState("chain"); // chain | pct | name
+  const [sortKey, setSortKey] = useState("chain"); // chain 为默认（链内自然顺序），其余为列头排序字段
+  const [sortDir, setSortDir] = useState(1); // 1 升序 / -1 降序
   const [viewMode, setViewMode] = useState(loadStoredView); // list（默认，扫描密度）| grid（卡片浏览）
   const [collapsedChains, setCollapsedChains] = useState(loadStoredCollapsed); // chainLabel -> 收起
   const [activeChain, setActiveChain] = useState(() => {
@@ -116,6 +127,7 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
   const [selected, setSelected] = useState(() => new Set()); // 多选对比（公司名）
   const [detailName, setDetailName] = useState(null); // 详情展开的公司名
   const [codesDraft, setCodesDraft] = useState(() => new Map()); // name -> 编辑中的代码
+  const [showAddStock, setShowAddStock] = useState(false); // 添加自选表单开关
 
   useEffect(() => {
     try { localStorage.setItem(VIEW_STORAGE_KEY, viewMode); } catch { /* 隐私模式等场景静默降级 */ }
@@ -140,12 +152,12 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
 
   const refresh = useCallback(async () => {
     setUniverse((current) => ({ ...current, source: current.data ? current.source : "loading" }));
-    const [universeResult, watchlistResult, researchResult] = await Promise.all([
-      loadStockUniverse(),
+    const [poolResult, watchlistResult, researchResult] = await Promise.all([
+      loadStockPool(),
       loadStockWatchlist(),
       loadStockResearch(),
     ]);
-    setUniverse(universeResult);
+    setUniverse(poolResult);
     if (watchlistResult.source === "live") {
       const map = new Map();
       for (const item of watchlistResult.data?.items ?? []) {
@@ -169,17 +181,7 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
   // 拉行情（所有有代码的公司）
   useEffect(() => {
     if (universe.source !== "live") return;
-    const codes = [];
-    const stack = (chains) => {
-      for (const chain of chains) {
-        for (const segment of chain.segments) {
-          for (const stock of segment.stocks) {
-            if (stock.code) codes.push(stock.code);
-          }
-        }
-      }
-    };
-    stack(universe.data?.chains ?? []);
+    const codes = (universe.data?.items ?? []).filter((s) => s.code).map((s) => s.code);
     if (codes.length === 0) return;
     let cancelled = false;
     loadMarketQuotes(codes).then((result) => {
@@ -191,38 +193,59 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
     return () => { cancelled = true; };
   }, [universe.source, universe.data]);
 
-  const chains = universe.data?.chains ?? [];
   const total = universe.data?.total ?? 0;
   const isLoading = universe.source === "loading";
   const error = universe.error;
 
-  const allStocks = useMemo(() => {
-    const list = [];
-    for (const chain of chains) {
-      for (const segment of chain.segments) {
-        for (const stock of segment.stocks) {
-          list.push({ ...stock, chainKey: chain.key, chainLabel: chain.label, segment: segment.label });
-        }
-      }
+  const allStocks = useMemo(() => universe.data?.items ?? [], [universe.data]);
+
+  // 列头排序：字段值取数器（行情字段从 quotes 取，其余取 stock 本身）。
+  const sortValue = useCallback((stock, key) => {
+    const quote = stock.code ? quotes.get(stock.code) : null;
+    switch (key) {
+      case "price": return quote?.price ?? null;
+      case "pct": return quote?.changePct ?? null;
+      case "turnover": return quote?.turnoverPct ?? null;
+      case "volumeRatio": return quote?.volumeRatio ?? null;
+      case "pe": return quote?.peTtm ?? null;
+      case "pb": return quote?.pb ?? null;
+      case "marketCap": return quote?.marketCap ?? null;
+      case "code": return stock.code ?? null;
+      case "board": return stock.board ?? (stock.custom ? "自选" : null);
+      default: return stock[key] ?? null;
     }
-    return list;
-  }, [chains]);
+  }, [quotes]);
 
   const visibleStocks = useMemo(() => {
     let list = allStocks;
     if (onlyFollowed) list = list.filter((s) => followed.has(s.name));
     if (onlyResearched) list = list.filter((s) => research.has(s.name));
-    if (sortKey === "name") {
-      list = [...list].sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
-    } else if (sortKey === "pct") {
+    if (sortKey !== "chain") {
       list = [...list].sort((a, b) => {
-        const pa = quotes.get(a.code)?.changePct ?? -Infinity;
-        const pb = quotes.get(b.code)?.changePct ?? -Infinity;
-        return pb - pa;
+        const va = sortValue(a, sortKey);
+        const vb = sortValue(b, sortKey);
+        // 缺失值沉底（不参与方向）。
+        if (va == null && vb == null) return 0;
+        if (va == null) return 1;
+        if (vb == null) return -1;
+        const cmp = typeof va === "number" && typeof vb === "number"
+          ? va - vb
+          : String(va).localeCompare(String(vb), "zh-CN");
+        return cmp * sortDir;
       });
     }
     return list;
-  }, [allStocks, onlyFollowed, onlyResearched, followed, research, sortKey, quotes]);
+  }, [allStocks, onlyFollowed, onlyResearched, followed, research, sortKey, sortDir, sortValue]);
+
+  // 列头点击：同列翻转方向，异列重置降序（涨跌幅等倾向看大值在前）。
+  const applySort = useCallback((key) => {
+    if (key === sortKey) {
+      setSortDir((d) => -d);
+    } else {
+      setSortKey(key);
+      setSortDir(-1);
+    }
+  }, [sortKey]);
 
   const visibleChains = useMemo(() => {
     const groups = new Map();
@@ -295,6 +318,16 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
     });
     void refresh();
   }, [codesDraft, refresh]);
+
+  // 自选池：移除自选股（默认池股票不提供移除入口）。
+  const removeCustomStock = useCallback(async (name) => {
+    try {
+      await removeStockPoolItem(name);
+      void refresh();
+    } catch {
+      /* 移除失败静默（下次刷新回滚显示） */
+    }
+  }, [refresh]);
 
   // 抽屉生成完成后的落库回调：优先用服务端规整后的快照，失败则本地兜底展示。
   const handleResearchSaved = useCallback((name, entry) => {
@@ -373,18 +406,21 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
             <input type="checkbox" checked={onlyResearched} onChange={(e) => setOnlyResearched(e.target.checked)} />
             <span>只看有档案</span>
           </label>
-          <select className="watchlist-sort" value={sortKey} onChange={(e) => setSortKey(e.target.value)}>
-            <option value="chain">按链排序</option>
-            <option value="pct">按涨跌幅</option>
-            <option value="name">按名称</option>
-          </select>
+          <button
+            type="button"
+            className="watchlist-refresh"
+            onClick={() => setShowAddStock((v) => !v)}
+            aria-expanded={showAddStock}
+          >
+            <IconPlus size={16} stroke={1.7} /> 添加自选
+          </button>
           <button type="button" className="watchlist-refresh" onClick={refresh}>
             <IconRefresh size={16} stroke={1.7} /> 刷新
           </button>
         </div>
       </div>
 
-      {error && universe.source === "fallback" && chains.length === 0 ? (
+      {error && universe.source === "fallback" && allStocks.length === 0 ? (
         <div className="watchlist-empty watchlist-empty--error">
           <IconAlertTriangle size={20} stroke={1.7} />
           <p>无法加载个股清单。{error?.message ? `（${error.message}）` : ""}</p>
@@ -406,6 +442,13 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
           </button>
         ))}
       </div>
+
+      {showAddStock ? (
+        <AddStockForm
+          onAdded={() => { setShowAddStock(false); void refresh(); }}
+          onCancel={() => setShowAddStock(false)}
+        />
+      ) : null}
 
       {selected.size >= 2 ? (
         <CompareBar
@@ -466,11 +509,32 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
 
             {collapsed ? null : viewMode === "list" ? (
               <div className="watchlist-list">
-                <div className="watchlist-list__head" aria-hidden="true">
-                  <span>公司</span>
-                  <span>代码</span>
-                  <span>现价</span>
-                  <span>涨跌幅</span>
+                <div className="watchlist-list__head" role="row">
+                  {[
+                    ["name", "公司", true],
+                    ["code", "代码", true],
+                    ["board", "板块", true],
+                    ["price", "现价", false],
+                    ["pct", "涨跌幅", false],
+                    ["turnover", "换手", false],
+                    ["volumeRatio", "量比", false],
+                    ["pe", "PE", false],
+                    ["pb", "PB", false],
+                  ].map(([key, label, sortableLeft]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={`watchlist-list__th${sortKey === key ? " watchlist-list__th--active" : ""}`}
+                      onClick={() => applySort(key)}
+                      aria-label={`按${label}排序`}
+                      title={`按${label}排序`}
+                    >
+                      {label}
+                      {sortKey === key ? (
+                        <span className="watchlist-list__th-arrow">{sortDir > 0 ? "↑" : "↓"}</span>
+                      ) : null}
+                    </button>
+                  ))}
                   <span>研究评级</span>
                   <span />
                   <span />
@@ -479,11 +543,12 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
                   <StockRow
                     key={stock.name}
                     stock={stock}
+                    quote={quotes.get(stock.code)}
                     isFollowed={followed.has(stock.name)}
                     researchEntry={research.get(stock.name)}
-                    quote={quotes.get(stock.code)}
                     onOpenDetail={() => setDetailName(stock.name)}
                     onToggleFollow={() => toggleFollow(stock.name)}
+                    onRemoveCustom={stock.custom ? () => removeCustomStock(stock.name) : null}
                   />
                 ))}
               </div>
@@ -528,6 +593,9 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
         />
       ) : null}
 
+      <AlertsPanel />
+      <WatchdogPanel />
+
       <ReviewPanel
         stocks={allStocks.filter((s) => followed.has(s.name))}
         quotes={quotes}
@@ -538,11 +606,12 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
 }
 
 // 清单视图行：一行一股，整行可点开研究台，星标独立操作。
-function StockRow({ stock, isFollowed, researchEntry, quote, onOpenDetail, onToggleFollow }) {
+function StockRow({ stock, quote, isFollowed, researchEntry, onOpenDetail, onToggleFollow, onRemoveCustom }) {
   const pct = quote?.changePct;
   const pctClass = pct == null ? "" : pct > 0 ? "up" : pct < 0 ? "down" : "flat";
   const verdict = researchEntry?.report?.rating?.verdict;
   const tone = verdictTone(verdict);
+  const num = (v, digits = 2) => (v == null ? "—" : Number(v).toFixed(digits));
   return (
     <div
       className="watchlist-list__row"
@@ -561,12 +630,18 @@ function StockRow({ stock, isFollowed, researchEntry, quote, onOpenDetail, onTog
           <span className={`watchlist-verdict-dot watchlist-verdict-dot--${tone}`} title={`研究评级：${verdict ?? "见档案"}`} />
         ) : null}
         {stock.name}
+        {stock.custom ? <span className="watchlist-list__custom-tag">自选</span> : null}
       </span>
       <span className={`watchlist-list__code${stock.code ? "" : " watchlist-list__code--none"}`}>
         {stock.code ?? "无代码"}
       </span>
+      <span className="watchlist-list__board">{stock.board ?? (stock.custom ? "自选" : "—")}</span>
       <span className="watchlist-list__price">{formatPrice(quote?.price)}</span>
       <span className={`watchlist-list__pct watchlist-list__pct--${pctClass}`}>{formatPct(pct)}</span>
+      <span className="watchlist-list__num">{num(quote?.turnoverPct)}</span>
+      <span className="watchlist-list__num">{num(quote?.volumeRatio)}</span>
+      <span className="watchlist-list__num">{num(quote?.peTtm, 1)}</span>
+      <span className="watchlist-list__num">{num(quote?.pb, 1)}</span>
       <span className="watchlist-list__verdict">
         {verdict ? <span className={`watchlist-badge watchlist-badge--${tone}`}>{verdict}</span> : <span className="watchlist-list__none">未研究</span>}
       </span>
@@ -578,7 +653,18 @@ function StockRow({ stock, isFollowed, researchEntry, quote, onOpenDetail, onTog
       >
         {isFollowed ? <IconStarFilled size={16} /> : <IconStar size={16} />}
       </button>
-      <span className="watchlist-list__go">详情</span>
+      {onRemoveCustom ? (
+        <button
+          type="button"
+          className="watchlist-list__go watchlist-list__go--remove"
+          onClick={(e) => { e.stopPropagation(); onRemoveCustom(); }}
+          title="从自选池移除"
+        >
+          移除
+        </button>
+      ) : (
+        <span className="watchlist-list__go">详情</span>
+      )}
     </div>
   );
 }
@@ -987,6 +1073,8 @@ function StockResearchDrawer({ stock, quote, meta, researchEntry, reduceMotion, 
             {task?.status === "failed" ? (
               <div className="watchlist-detail__analysis watchlist-detail__analysis--error">{task.error}</div>
             ) : null}
+            {/* 真实数据基本面不依赖 AI 报告：未研究态也展示 */}
+            {stock.code ? <LiveFundamentalsBlock code={stock.code} /> : null}
           </>
         ) : (
           <>
@@ -1011,6 +1099,7 @@ function StockResearchDrawer({ stock, quote, meta, researchEntry, reduceMotion, 
                   <RatingBlock rating={report.rating} />
                   <FactsBlock facts={report.facts} />
                   <TechnicalsBlock technicals={report.technicals} />
+                  {stock.code ? <LiveFundamentalsBlock code={stock.code} /> : null}
                 </>
               ) : null}
               {tab === "debate" ? <DebateBlock debate={report.debate} /> : null}
@@ -1147,5 +1236,274 @@ function ReviewPanel({ stocks, quotes, research }) {
         </div>
       ) : null}
     </div>
+  );
+}
+
+// ===== 监控台 v2 组件：实时基本面块 / 异动中心 / 盯盘配置 / 添加自选 =====
+
+// 真实数据基本面：新浪财务 + 自建估值分位 + 日K均线速览（区别于 AI 研究报告的生成内容）。
+function LiveFundamentalsBlock({ code }) {
+  const [financials, setFinancials] = useState(null);
+  const [valuation, setValuation] = useState(null);
+  const [technicals, setTechnicals] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadStockFinancials(code).then((r) => { if (!cancelled) setFinancials(r); });
+    loadValuationHistory(code).then((r) => { if (!cancelled) setValuation(r); });
+    loadStockTechnicals(code).then((r) => { if (!cancelled) setTechnicals(r); });
+    return () => { cancelled = true; };
+  }, [code]);
+
+  const trendLabel = { bullish: "多头排列", bearish: "空头排列", mixed: "均线纠缠", unknown: "样本不足" };
+  const num = (v, digits = 2) => (v == null ? "—" : Number(v).toFixed(digits));
+  const fin = financials?.source === "live" ? financials.data : null;
+  const val = valuation?.source === "live" ? valuation.data : null;
+  const tec = technicals?.source === "live" ? technicals.data : null;
+
+  return (
+    <div className="watchlist-live">
+      <div className="watchlist-live__head">
+        <span className="watchlist-live__tag">LIVE DATA</span>
+        <h4>实时基本面（真实数据源）</h4>
+      </div>
+
+      {fin ? (
+        fin.available && fin.periods?.length ? (
+          <div className="watchlist-live__section">
+            <h5>财务指标（新浪，最新四期）</h5>
+            <div className="watchlist-live__table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>报告期</th><th>ROE%</th><th>毛利率%</th><th>净利增速%</th><th>营收增速%</th><th>负债率%</th><th>EPS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fin.periods.slice(0, 4).map((p) => (
+                    <tr key={p.reportDate}>
+                      <td>{p.reportDate}</td>
+                      <td>{num(p.roe)}</td>
+                      <td>{num(p.grossMargin)}</td>
+                      <td className={(p.netProfitGrowth ?? 0) > 0 ? "watchlist-up" : "watchlist-down"}>{num(p.netProfitGrowth, 1)}</td>
+                      <td className={(p.revenueGrowth ?? 0) > 0 ? "watchlist-up" : "watchlist-down"}>{num(p.revenueGrowth, 1)}</td>
+                      <td>{num(p.debtRatio)}</td>
+                      <td>{num(p.eps, 3)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <p className="watchlist-live__empty">财务数据不可用（新浪源缺失或解析失败）。</p>
+        )
+      ) : <p className="watchlist-live__empty">财务数据加载中…</p>}
+
+      {val ? (
+        <div className="watchlist-live__section">
+          <h5>估值水位</h5>
+          <div className="watchlist-live__valuation">
+            <span>PE(TTM) <strong>{num(val.current?.pe, 1)}</strong></span>
+            <span>PB <strong>{num(val.current?.pb, 1)}</strong></span>
+            <span>
+              分位 <strong>
+                {val.percentile?.pe != null ? `${val.percentile.pe}%` : "样本积累中"}
+              </strong>
+            </span>
+            {val.since ? <em>（自建序列自 {val.since} 起，每日快照积累）</em> : <em>（watchdog 收盘后开始积累）</em>}
+          </div>
+        </div>
+      ) : null}
+
+      {tec ? (
+        <div className="watchlist-live__section">
+          <h5>均线速览（日K 前复权）</h5>
+          <div className="watchlist-live__ma">
+            <span>MA5 <strong>{num(tec.ma?.ma5, 1)}</strong></span>
+            <span>MA20 <strong>{num(tec.ma?.ma20, 1)}</strong></span>
+            <span>MA60 <strong>{num(tec.ma?.ma60, 1)}</strong></span>
+            <span className={`watchlist-live__trend watchlist-live__trend--${tec.trend}`}>
+              {trendLabel[tec.trend] ?? tec.trend}
+            </span>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// 异动中心：watchdog 触发的急拉/急跌/涨跌停记录。
+function AlertsPanel() {
+  const [result, setResult] = useState({ data: null, source: "loading", error: null });
+
+  useEffect(() => {
+    let cancelled = false;
+    loadStockAlerts().then((r) => { if (!cancelled) setResult(r); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const items = result.data?.items ?? [];
+  const typeLabel = { surge: "急拉", plunge: "急跌", limitUp: "涨停", limitDown: "跌停" };
+  const typeClass = { surge: "up", plunge: "down", limitUp: "up", limitDown: "down" };
+
+  return (
+    <div className="watchlist-alerts">
+      <div className="watchlist-alerts__head">
+        <h2>异动中心</h2>
+        <span className="watchlist-alerts__meta">
+          {result.source === "live"
+            ? items.length ? `${items.length} 条记录（近 7 天）` : "近 7 天无异动"
+            : "记录不可用（watchdog 未运行或无记录）"}
+        </span>
+      </div>
+      {items.length ? (
+        <div className="watchlist-alerts__list">
+          {items.slice(0, 10).map((item, i) => (
+            <div key={i} className="watchlist-alerts__item">
+              <span className={`watchlist-alerts__type watchlist-alerts__type--${typeClass[item.type] ?? ""}`}>
+                {typeLabel[item.type] ?? item.type}
+              </span>
+              <span className="watchlist-alerts__name">{item.name}</span>
+              <span className={`watchlist-alerts__pct ${typeClass[item.type] === "up" ? "watchlist-up" : "watchlist-down"}`}>
+                {item.changePct > 0 ? "+" : ""}{item.changePct}%
+              </span>
+              <span className="watchlist-alerts__price">{item.price}</span>
+              <span className="watchlist-alerts__time">{new Date(item.ts).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="watchlist-alerts__empty">盯盘由 watchdog 进程驱动（npm run watchdog）。触发急拉/急跌/涨跌停会记录在这里并推送微信。</p>
+      )}
+    </div>
+  );
+}
+
+// 盯盘配置：阈值/开关/推送测试。
+function WatchdogPanel() {
+  const [result, setResult] = useState({ data: null, source: "loading", error: null });
+  const [saving, setSaving] = useState(false);
+  const [testState, setTestState] = useState(null);
+
+  const load = useCallback(() => {
+    loadWatchdogConfig().then(setResult);
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const config = result.data?.config;
+
+  const patch = async (updates) => {
+    if (!config) return;
+    setSaving(true);
+    try {
+      const next = await updateWatchdogConfig(updates);
+      setResult({ data: next, source: "live", error: null });
+    } catch { /* 保存失败保持现状 */ }
+    setSaving(false);
+  };
+
+  const runTest = async () => {
+    setTestState({ status: "running" });
+    try {
+      await testWatchdogPush();
+      setTestState({ status: "ok", message: "已发送，请查收微信" });
+    } catch (error) {
+      setTestState({ status: "failed", message: error?.message || "推送失败" });
+    }
+  };
+
+  if (!config) return null;
+
+  return (
+    <div className="watchdog-panel">
+      <div className="watchdog-panel__head">
+        <h2>盯盘配置</h2>
+        <span className="watchdog-panel__meta">
+          {result.data?.pushConfigured ? "Server酱已配置" : "未配置 SENDKEY（.env）——仅落库不推送"}
+        </span>
+      </div>
+      <div className="watchdog-panel__body">
+        <label className="watchdog-panel__field">
+          <input type="checkbox" checked={config.enabled} disabled={saving}
+            onChange={(e) => patch({ enabled: e.target.checked })} />
+          <span>盯盘开关</span>
+        </label>
+        <label className="watchdog-panel__field">
+          <input type="checkbox" checked={config.pushEnabled} disabled={saving}
+            onChange={(e) => patch({ pushEnabled: e.target.checked })} />
+          <span>微信推送</span>
+        </label>
+        <label className="watchdog-panel__field">
+          <span>急拉急跌阈值 ±%</span>
+          <input type="number" step="0.5" min="0.5" max="20" defaultValue={config.thresholdPct} disabled={saving}
+            onBlur={(e) => { const v = Number(e.target.value); if (v > 0 && v !== config.thresholdPct) patch({ thresholdPct: v }); }} />
+        </label>
+        <label className="watchdog-panel__field">
+          <span>窗口（分钟）</span>
+          <input type="number" step="1" min="1" max="60" defaultValue={config.windowMinutes} disabled={saving}
+            onBlur={(e) => { const v = Number(e.target.value); if (v > 0 && v !== config.windowMinutes) patch({ windowMinutes: v }); }} />
+        </label>
+        <label className="watchdog-panel__field">
+          <span>冷却（分钟）</span>
+          <input type="number" step="1" min="1" max="120" defaultValue={config.cooldownMinutes} disabled={saving}
+            onBlur={(e) => { const v = Number(e.target.value); if (v > 0 && v !== config.cooldownMinutes) patch({ cooldownMinutes: v }); }} />
+        </label>
+        <button type="button" className="watchdog-panel__test" onClick={runTest} disabled={testState?.status === "running"}>
+          {testState?.status === "running" ? "发送中…" : "测试推送"}
+        </button>
+      </div>
+      {testState?.status === "ok" ? <p className="watchdog-panel__hint watchdog-panel__hint--ok">{testState.message}</p> : null}
+      {testState?.status === "failed" ? <p className="watchdog-panel__hint watchdog-panel__hint--err">{testState.message}</p> : null}
+    </div>
+  );
+}
+
+// 添加自选表单：任意 A 股（名称 + 6 位代码必填）。
+function AddStockForm({ onAdded, onCancel }) {
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [chain, setChain] = useState("");
+  const [board, setBoard] = useState("");
+  const [error, setError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setError(null);
+    if (!name.trim()) return setError("公司名不能为空。");
+    if (!/^\d{6}$/.test(code.trim())) return setError("代码必须是 6 位数字。");
+    setSubmitting(true);
+    try {
+      await addStockPoolItem({
+        name: name.trim(),
+        code: code.trim(),
+        chain: chain.trim() || null,
+        board: board.trim() || null,
+      });
+      onAdded?.();
+    } catch (err) {
+      setError(err?.message || "添加失败。");
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form className="add-stock" onSubmit={submit}>
+      <div className="add-stock__head">
+        <h3>添加自选股</h3>
+        <button type="button" onClick={onCancel} aria-label="取消添加"><IconX size={16} /></button>
+      </div>
+      <div className="add-stock__fields">
+        <label>公司名 *<input value={name} onChange={(e) => setName(e.target.value)} placeholder="如 贵州茅台" autoFocus /></label>
+        <label>代码 *<input value={code} onChange={(e) => setCode(e.target.value)} placeholder="6 位数字，如 600519" inputMode="numeric" /></label>
+        <label>链<input value={chain} onChange={(e) => setChain(e.target.value)} placeholder="如 自选 / 国产链（可选）" /></label>
+        <label>板块<input value={board} onChange={(e) => setBoard(e.target.value)} placeholder="如 白酒（可选）" /></label>
+      </div>
+      {error ? <p className="add-stock__error">{error}</p> : null}
+      <div className="add-stock__actions">
+        <button type="submit" disabled={submitting}>{submitting ? "添加中…" : "添加到股票池"}</button>
+      </div>
+    </form>
   );
 }

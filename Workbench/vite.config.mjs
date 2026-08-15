@@ -31,6 +31,7 @@ export default defineConfig(({ mode }) => {
         obsidianVaultRoot,
         zhipuApiKey: env.ZHIPU_API_KEY || null,
         zhipuBaseUrl: env.ZHIPU_BASE_URL || null,
+        serverChanSendKey: env.SERVERCHAN_SENDKEY || null,
       }),
     ],
   };

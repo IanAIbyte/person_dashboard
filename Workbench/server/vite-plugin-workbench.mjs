@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -41,9 +41,15 @@ import {
   createStockResearchRepository,
 } from "./stock-research.mjs";
 import { createLlmClient } from "./llm-client.mjs";
-import { createMarketDataService } from "./market-data.mjs";
+import { pushServerChan } from "./serverchan.mjs";
+import { computeMA, createMarketDataService, maTrend } from "./market-data.mjs";
 import { createStockNewsService } from "./stock-news.mjs";
 import { createStockAnalysisService } from "./stock-analysis.mjs";
+import { createStockFinancialsService } from "./stock-financials.mjs";
+import {
+  createStockPoolRepository,
+  STOCK_POOL_PATH,
+} from "./stock-pool.mjs";
 import {
   materialFolderPayload,
   materialReadingQueuePayload,
@@ -781,6 +787,69 @@ function requestFilters(url) {
   return filters;
 }
 
+// ===== 监控台 v2 共享：watchdog 状态文件读写 + 估值分位 + 默认配置 =====
+
+const WATCHDOG_STATE_FILES = {
+  alerts: ".workbench-stock-alerts.json",
+  config: ".workbench-watchdog-config.json",
+  valuation: ".workbench-valuation-history.json",
+};
+const WATCHDOG_STATE_DIR = "10_raw/my-thoughts/reading-notes";
+
+const WATCHDOG_DEFAULT_CONFIG = {
+  enabled: true,
+  thresholdPct: 3,
+  windowMinutes: 5,
+  cooldownMinutes: 15,
+  pushEnabled: true,
+  dailyPushLimit: 5,
+};
+
+function watchdogStatePath(kind) {
+  return path.join(vaultRootForWatchdogState(), WATCHDOG_STATE_DIR, WATCHDOG_STATE_FILES[kind]);
+}
+// vaultRoot 在插件工厂内；这里用模块级默认根（与 watchdog.mjs 一致：仓库旁「个人知识库」）。
+function vaultRootForWatchdogState() {
+  return defaultVaultRoot;
+}
+
+async function readWatchdogState(kind, fallback) {
+  try {
+    return JSON.parse(await readFile(watchdogStatePath(kind), "utf8"));
+  } catch {
+    return fallback;
+  }
+}
+
+async function writeWatchdogState(kind, value) {
+  const target = watchdogStatePath(kind);
+  await mkdir(path.dirname(target), { recursive: true });
+  const tmp = `${target}.${Date.now()}.tmp`;
+  await writeFile(tmp, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  try {
+    await rename(tmp, target);
+  } finally {
+    await unlink(tmp).catch(() => {});
+  }
+}
+
+// 自建估值历史的当前分位（0-100，null 表示样本不足）。样本 <5 天不计算分位。
+function valuationPercentile(series, quote) {
+  const pick = (key, value) =>
+    value == null ? null : (() => {
+      const values = series.map((p) => p[key]).filter((v) => v != null);
+      if (values.length < 5) return null;
+      const below = values.filter((v) => v <= value).length;
+      return Math.round((below / values.length) * 100);
+    })();
+  return {
+    pe: pick("pe", quote.peTtm),
+    pb: pick("pb", quote.pb),
+    sampleDays: series.length,
+  };
+}
+
+
 function openLocalDocument(vaultRoot, document, target) {
   const absolutePath = path.resolve(vaultRoot, document.path);
   if (target === "finder") {
@@ -804,6 +873,7 @@ export function workbenchApiPlugin({
   obsidianVaultRoot = null,
   zhipuApiKey = null,
   zhipuBaseUrl = null,
+  serverChanSendKey = null,
   readerExplanationService = null,
 } = {}) {
   let readerNoteApiMutationQueue = Promise.resolve();
@@ -812,6 +882,8 @@ export function workbenchApiPlugin({
   const stockWatchlist = createStockWatchlistRepository({ vaultRoot });
   const stockCodes = createStockCodesRepository({ vaultRoot });
   const stockResearch = createStockResearchRepository({ vaultRoot });
+  const stockPool = createStockPoolRepository({ vaultRoot });
+  const stockFinancials = createStockFinancialsService({ vaultRoot });
   const llmClient = createLlmClient({
     apiKey: zhipuApiKey,
     ...(zhipuBaseUrl ? { baseUrl: zhipuBaseUrl } : {}),
@@ -1736,6 +1808,122 @@ export function workbenchApiPlugin({
             return json(res, 200, {
               items: [...quotes.values()],
             });
+          }
+
+          // ===== 监控台 v2：股票池 / 财务 / 技术 / 异动 / 盯盘配置 / 估值分位 =====
+
+          if (req.method === "GET" && url.pathname === "/api/stock-pool") {
+            const overrides = await stockCodes.overrides();
+            const items = await stockPool.pool(overrides);
+            return json(res, 200, { generatedAt: new Date().toISOString(), total: items.length, items });
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/stock-pool") {
+            const body = await readJson(req, 16 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["name", "code", "chain", "board", "segment", "note"]),
+              "INVALID_STOCK_POOL_REQUEST",
+            );
+            const item = await stockPool.addCustom(body);
+            vaultSync.notifyPaths([STOCK_POOL_PATH]);
+            return json(res, 200, item);
+          }
+
+          const stockPoolMatch = url.pathname.match(/^\/api\/stock-pool\/([^/]+)$/);
+          if (req.method === "DELETE" && stockPoolMatch) {
+            const name = decodeURIComponent(stockPoolMatch[1]);
+            const removed = await stockPool.removeCustom(name);
+            if (removed) vaultSync.notifyPaths([STOCK_POOL_PATH]);
+            return json(res, 200, { removed });
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/stock-financials") {
+            const code = url.searchParams.get("code") ?? "";
+            if (!/^\d{6}$/.test(code)) {
+              return json(res, 400, { error: { message: "股票代码必须是 6 位数字。" } });
+            }
+            const financials = await stockFinancials.getFinancials(code);
+            return json(res, 200, financials);
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/stock-technicals") {
+            const code = url.searchParams.get("code") ?? "";
+            if (!/^\d{6}$/.test(code)) {
+              return json(res, 400, { error: { message: "股票代码必须是 6 位数字。" } });
+            }
+            const klines = await marketData.getDailyKlines(code, 120);
+            const ma = computeMA(klines);
+            return json(res, 200, {
+              code,
+              klineCount: klines.length,
+              latest: klines.at(-1) ?? null,
+              ma,
+              trend: maTrend(ma),
+            });
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/stock-alerts") {
+            const alerts = await readWatchdogState("alerts", { items: [] });
+            return json(res, 200, {
+              updatedAt: alerts.updatedAt ?? null,
+              total: (alerts.items ?? []).length,
+              items: [...(alerts.items ?? [])].reverse().slice(0, 50),
+            });
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/watchdog-config") {
+            const config = await readWatchdogState("config", {});
+            return json(res, 200, {
+              pushConfigured: Boolean(serverChanSendKey),
+              config: { ...WATCHDOG_DEFAULT_CONFIG, ...config },
+            });
+          }
+
+          if (req.method === "PUT" && url.pathname === "/api/watchdog-config") {
+            const body = await readJson(req, 8 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["enabled", "thresholdPct", "windowMinutes", "cooldownMinutes", "pushEnabled", "dailyPushLimit"]),
+              "INVALID_WATCHDOG_CONFIG",
+            );
+            const current = await readWatchdogState("config", {});
+            const next = { ...WATCHDOG_DEFAULT_CONFIG, ...current, ...body };
+            await writeWatchdogState("config", next);
+            return json(res, 200, { pushConfigured: Boolean(serverChanSendKey), config: next });
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/valuation-history") {
+            const code = url.searchParams.get("code") ?? "";
+            if (!/^\d{6}$/.test(code)) {
+              return json(res, 400, { error: { message: "股票代码必须是 6 位数字。" } });
+            }
+            const history = await readWatchdogState("valuation", {});
+            const series = history[code] ?? [];
+            const quotesNow = await marketData.getQuotes([code]);
+            const quote = quotesNow.get(code) ?? null;
+            return json(res, 200, {
+              code,
+              points: series,
+              since: series[0]?.date ?? null,
+              current: quote ? { pe: quote.peTtm, pb: quote.pb, price: quote.price } : null,
+              percentile: quote ? valuationPercentile(series, quote) : null,
+            });
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/watchdog-test") {
+            if (!serverChanSendKey) {
+              return json(res, 400, { error: { message: "未配置 SERVERCHAN_SENDKEY，无法测试推送。" } });
+            }
+            const result = await pushServerChan(
+              serverChanSendKey,
+              "【测试】司南工作台盯盘推送",
+              "这是一条测试消息。收到即说明 Server酱 推送链路正常。",
+            );
+            if (!result.ok) {
+              return json(res, 502, { error: { message: `推送失败：${result.reason}` } });
+            }
+            return json(res, 200, { ok: true });
           }
 
           if (req.method === "GET" && url.pathname === "/api/stock-news") {

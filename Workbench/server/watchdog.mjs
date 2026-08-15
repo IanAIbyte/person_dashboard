@@ -14,6 +14,7 @@ import { createMarketDataService } from "./market-data.mjs";
 import { createStockFinancialsService } from "./stock-financials.mjs";
 import { createStockPoolRepository } from "./stock-pool.mjs";
 import { createStockCodesRepository } from "./stock-codes.mjs";
+import { pushServerChan } from "./serverchan.mjs";
 
 const workbenchRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const vaultRoot = path.resolve(workbenchRoot, "..", "个人知识库");
@@ -24,7 +25,6 @@ const VALUATION_PATH = path.join(STATE_DIR, ".workbench-valuation-history.json")
 
 const TICK_MS = 30_000;
 const MAX_ALERT_ITEMS = 500;
-const SERVERCHAN_URL = "https://sctapi.ftqq.com";
 
 const DEFAULT_CONFIG = {
   enabled: true,
@@ -86,23 +86,7 @@ function isTradingHours(now = new Date()) {
   return (hm >= 930 && hm <= 1130) || (hm >= 1300 && hm < 1500);
 }
 
-// ---- Server酱推送 ----
-async function pushServerChan(sendKey, title, desp) {
-  if (!sendKey) return { ok: false, reason: "SENDKEY 未配置" };
-  try {
-    const body = new URLSearchParams({ title, desp });
-    const response = await fetch(`${SERVERCHAN_URL}/${sendKey}.send`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-    });
-    const payload = await response.json().catch(() => null);
-    if (response.ok && payload?.code === 0) return { ok: true };
-    return { ok: false, reason: payload?.message || `HTTP ${response.status}` };
-  } catch (error) {
-    return { ok: false, reason: error?.message || "网络失败" };
-  }
-}
+// ---- Server酱推送：见 serverchan.mjs（与 vite-plugin 共用）----
 
 // ---- 主逻辑 ----
 async function main() {

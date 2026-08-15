@@ -559,6 +559,88 @@ export function loadStockNews(name, code) {
   );
 }
 
+// ===== 监控台 v2：股票池 / 财务 / 技术 / 异动 / 盯盘配置 / 估值 =====
+
+export function loadStockPool() {
+  return withFallback(
+    () => cachedGet("/api/stock-pool"),
+    { generatedAt: null, total: 0, items: [] },
+  );
+}
+
+export function addStockPoolItem(payload) {
+  return request("/api/stock-pool", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  }).then((result) => {
+    invalidateCache("/api/stock-pool");
+    return result;
+  });
+}
+
+export function removeStockPoolItem(name) {
+  return request(`/api/stock-pool/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+    body: JSON.stringify({}),
+  }).then((result) => {
+    invalidateCache("/api/stock-pool");
+    return result;
+  });
+}
+
+export function loadStockFinancials(code) {
+  return withFallback(
+    () => cachedGet(`/api/stock-financials?code=${encodeURIComponent(code)}`),
+    { code, available: false, periods: [] },
+  );
+}
+
+export function loadStockTechnicals(code) {
+  return withFallback(
+    () => cachedGet(`/api/stock-technicals?code=${encodeURIComponent(code)}`),
+    { code, klineCount: 0, latest: null, ma: {}, trend: "unknown" },
+  );
+}
+
+export function loadStockAlerts() {
+  return withFallback(
+    () => cachedGet("/api/stock-alerts", 30_000),
+    { updatedAt: null, total: 0, items: [] },
+  );
+}
+
+export function loadWatchdogConfig() {
+  return withFallback(
+    () => cachedGet("/api/watchdog-config", 10_000),
+    { pushConfigured: false, config: null },
+  );
+}
+
+export function updateWatchdogConfig(patch) {
+  return request("/api/watchdog-config", {
+    method: "PUT",
+    body: JSON.stringify(patch),
+  }).then((result) => {
+    invalidateCache("/api/watchdog-config");
+    return result;
+  });
+}
+
+export function loadValuationHistory(code) {
+  return withFallback(
+    () => cachedGet(`/api/valuation-history?code=${encodeURIComponent(code)}`),
+    { code, points: [], since: null, current: null, percentile: null },
+  );
+}
+
+export function testWatchdogPush() {
+  return request("/api/watchdog-test", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+
 export function startStockSentiment(payload) {
   return request("/api/stock-analysis/sentiment", {
     method: "POST",
