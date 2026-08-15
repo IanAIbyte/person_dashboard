@@ -1351,11 +1351,12 @@
 .watchlist-list__head,
 .watchlist-list__row {
   display: grid;
-  grid-template-columns: minmax(130px, 1.7fr) 64px 56px 60px 72px 74px 54px 50px 56px 52px minmax(72px, 1fr) 36px 44px;
+  /* 列宽按内容定宽：链列表头「国产链/海外链」约 74px，须给足 92px 防 nowrap 溢出重叠 */
+  grid-template-columns: minmax(130px, 1.7fr) 64px 92px 64px 72px 74px 54px 50px 56px 52px minmax(72px, 1fr) 36px 44px;
   align-items: center;
   gap: 6px;
   padding: 0 12px;
-  min-width: 1010px;
+  min-width: 1046px;
 }
 
 .watchlist-list__head {
@@ -1367,6 +1368,13 @@
   letter-spacing: 0.06em;
   color: var(--ink-faint);
   border-bottom: 1px solid var(--line-strong);
+}
+
+/* 表头非交互列（研究评级等）同样防换行 */
+.watchlist-list__head > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 可点击排序表头 */
