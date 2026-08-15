@@ -1285,6 +1285,9 @@
 .watchlist-chain--list .watchlist-chain__head--toggle { margin-bottom: 6px; }
 .watchlist-chain--list .watchlist-chain__title h2 { font-size: 16px; }
 
+/* 单链视图：链头由 Tab 承载，容器顶部收紧 */
+.watchlist-chain--solo { padding-top: 10px; }
+
 /* ===== 链 Tab 导航（全部 / 国产链 / 海外链 / 封测） ===== */
 .watchlist-chaintabs {
   display: flex;

@@ -424,40 +424,45 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
 
       {displayChains.map((chain, chainIndex) => {
         const chainFollowed = chain.stocks.filter((s) => followed.has(s.name)).length;
-        const collapsed = collapsedChains.has(chain.label);
+        const isSolo = effectiveChain !== "all";
+        // 单链视图下分组信息已由链 Tab 承载：隐藏链头；且忽略折叠状态，
+        // 避免「全部」视图折叠后切入单链无头可点、清单被藏死。
+        const collapsed = !isSolo && collapsedChains.has(chain.label);
         return (
           <motion.section
             key={chain.label}
-            className={`watchlist-chain${viewMode === "list" ? " watchlist-chain--list" : ""}${collapsed ? " watchlist-chain--collapsed" : ""}`}
+            className={`watchlist-chain${viewMode === "list" ? " watchlist-chain--list" : ""}${collapsed ? " watchlist-chain--collapsed" : ""}${isSolo ? " watchlist-chain--solo" : ""}`}
             {...enter}
             transition={{ ...enter.transition, delay: chainIndex * 0.05 }}
           >
-            <header
-              className="watchlist-chain__head watchlist-chain__head--toggle"
-              onClick={() => toggleChainCollapsed(chain.label)}
-              role="button"
-              tabIndex={0}
-              aria-expanded={!collapsed}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  toggleChainCollapsed(chain.label);
-                }
-              }}
-            >
-              <div className="watchlist-chain__title">
-                <IconChevronDown
-                  size={16}
-                  stroke={1.7}
-                  className={`watchlist-chain__chevron${collapsed ? " watchlist-chain__chevron--collapsed" : ""}`}
-                />
-                <h2>{chain.label}</h2>
-              </div>
-              <div className="watchlist-chain__meta">
-                <span className="watchlist-chain__count">{chain.stocks.length} 只</span>
-                <span className="watchlist-chain__count">{chainFollowed} 关注</span>
-              </div>
-            </header>
+            {isSolo ? null : (
+              <header
+                className="watchlist-chain__head watchlist-chain__head--toggle"
+                onClick={() => toggleChainCollapsed(chain.label)}
+                role="button"
+                tabIndex={0}
+                aria-expanded={!collapsed}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    toggleChainCollapsed(chain.label);
+                  }
+                }}
+              >
+                <div className="watchlist-chain__title">
+                  <IconChevronDown
+                    size={16}
+                    stroke={1.7}
+                    className={`watchlist-chain__chevron${collapsed ? " watchlist-chain__chevron--collapsed" : ""}`}
+                  />
+                  <h2>{chain.label}</h2>
+                </div>
+                <div className="watchlist-chain__meta">
+                  <span className="watchlist-chain__count">{chain.stocks.length} 只</span>
+                  <span className="watchlist-chain__count">{chainFollowed} 关注</span>
+                </div>
+              </header>
+            )}
 
             {collapsed ? null : viewMode === "list" ? (
               <div className="watchlist-list">
