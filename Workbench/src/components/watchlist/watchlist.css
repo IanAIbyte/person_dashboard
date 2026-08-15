@@ -1497,6 +1497,9 @@
 .watchlist-list__pct--down { color: var(--ok); }
 .watchlist-list__pct--flat { color: var(--ink-soft); }
 
+/* 表头右对齐组含研究评级列，值须同步右对齐，否则弹性列内表头与徽章左右错开 */
+.watchlist-list__row .watchlist-list__verdict { text-align: right; }
+
 .watchlist-list__verdict .watchlist-badge { margin-left: 0; }
 
 .watchlist-list__none { font-size: 12px; color: var(--ink-faint); }
