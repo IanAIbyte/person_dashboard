@@ -1341,20 +1341,21 @@
   gap: 12px;
 }
 
-/* ===== 清单视图：一行一股，宽屏自动双列 ===== */
+/* ===== 清单视图：一行一股。12 数据列需足宽，窄视口横向滚动 ===== */
 .watchlist-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
-  column-gap: 12px;
+  grid-template-columns: 1fr;
+  overflow-x: auto;
 }
 
 .watchlist-list__head,
 .watchlist-list__row {
   display: grid;
-  grid-template-columns: minmax(110px, 1.6fr) 64px 60px 72px 74px 54px 50px 56px 52px minmax(76px, 1fr) 36px 44px;
+  grid-template-columns: minmax(130px, 1.8fr) 64px 60px 72px 74px 54px 50px 56px 52px minmax(76px, 1fr) 36px 44px;
   align-items: center;
   gap: 6px;
   padding: 0 12px;
+  min-width: 940px;
 }
 
 .watchlist-list__head {
