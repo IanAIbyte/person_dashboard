@@ -10,6 +10,8 @@ import {
 } from "./api-errors";
 import { createDailyHotLoader } from "../../shared/ai-hot.mjs";
 
+export { countNewDailyHotItems } from "../../shared/ai-hot.mjs";
+
 const DEFAULT_TIMEOUT = 12_000;
 
 async function request(path, options = {}) {

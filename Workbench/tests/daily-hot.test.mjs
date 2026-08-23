@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   classifyDailyHot,
+  countNewDailyHotItems,
   createDailyHotLoader,
 } from "../shared/ai-hot.mjs";
 
@@ -157,4 +158,31 @@ test("caches a successful read and exposes stale data when a later refresh fails
   assert.equal(stale.fetchedAt, first.fetchedAt);
   assert.match(stale.error.message, /offline/);
 });
+
+test("counts newly appeared items across tiers for refresh feedback", () => {
+  const previous = {
+    tiers: {
+      mustRead: [{ id: "a" }, { id: "b" }],
+      browse: [{ id: "c" }],
+      other: [{ id: "d" }],
+    },
+  };
+  const next = {
+    tiers: {
+      mustRead: [{ id: "a" }, { id: "b" }, { id: "new-must" }],
+      browse: [{ id: "c" }, { id: "new-browse" }],
+      other: [{ id: "d" }, { id: "new-other" }, { id: "new-other" }],
+    },
+  };
+
+  assert.equal(countNewDailyHotItems(previous, next), 3);
+  assert.equal(countNewDailyHotItems(next, next), 0);
+  assert.equal(countNewDailyHotItems(null, next), 0);
+  assert.equal(countNewDailyHotItems(previous, null), 0);
+  assert.equal(countNewDailyHotItems(
+    { tiers: { mustRead: [{ noId: true }] } },
+    { tiers: { mustRead: [{ id: "fresh" }] } },
+  ), 1);
+});
+
 

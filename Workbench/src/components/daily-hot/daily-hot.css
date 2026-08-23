@@ -145,6 +145,11 @@
   opacity: 0.65;
 }
 
+.daily-hot-refresh--done {
+  border-color: var(--accent-soft);
+  color: var(--accent);
+}
+
 .daily-hot-refresh svg {
   width: 14px;
   height: 14px;

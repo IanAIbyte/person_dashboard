@@ -333,6 +333,33 @@ export function classifyDailyHot({ hotTopics, selectedItems, dailyReport, strate
   };
 }
 
+const DAILY_HOT_TIER_KEYS = ["mustRead", "browse", "other"];
+
+function tierItemIds(payload) {
+  const ids = new Set();
+  for (const key of DAILY_HOT_TIER_KEYS) {
+    for (const item of asArray(payload?.tiers?.[key])) {
+      if (item?.id != null) ids.add(String(item.id));
+    }
+  }
+  return ids;
+}
+
+// 手动刷新后向前端反馈「新增了几条」：对比前后两次 payload 各层级的条目 id（按 id 去重）。
+export function countNewDailyHotItems(previousPayload, nextPayload) {
+  if (!previousPayload?.tiers || !nextPayload?.tiers) return 0;
+  const seen = tierItemIds(previousPayload);
+  const added = new Set();
+  for (const key of DAILY_HOT_TIER_KEYS) {
+    for (const item of asArray(nextPayload.tiers[key])) {
+      if (item?.id == null) continue;
+      const id = String(item.id);
+      if (!seen.has(id)) added.add(id);
+    }
+  }
+  return added.size;
+}
+
 async function fetchJson(fetchImpl, path, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
