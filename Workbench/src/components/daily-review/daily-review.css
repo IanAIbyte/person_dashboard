@@ -565,3 +565,38 @@
   margin-top: 8px;
 }
 
+/* ---- 双击就地编辑 ---- */
+
+.review-portfolio__editable {
+  cursor: text;
+  border-bottom: 1px dashed transparent;
+}
+
+.review-portfolio__editable:hover {
+  border-bottom-color: var(--line-strong);
+}
+
+.review-portfolio__edit-input {
+  min-height: 24px;
+  padding: 1px 6px;
+  border: 1px solid var(--accent-soft);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  font-size: inherit;
+  font-family: var(--font-mono);
+  width: 88px;
+}
+
+.review-portfolio__name .review-portfolio__edit-input {
+  width: 104px;
+  font-family: inherit;
+}
+
+.review-portfolio__code .review-portfolio__edit-input {
+  width: 76px;
+  font-size: 10px;
+}
+
+
