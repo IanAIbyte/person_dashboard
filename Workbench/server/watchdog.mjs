@@ -1,4 +1,4 @@
-// 重点个股盯盘 watchdog（独立进程：npm run watchdog）。
+// 每日复盘盯盘 watchdog（独立进程：npm run watchdog）。
 // 与 dev server 解耦常驻运行：交易时段轮询股票池行情 → 急拉/急跌/涨跌停
 // 检测 → Server酱微信推送 + 异动记录落库（页面「异动中心」读取展示）。
 // 收盘后落估值快照（自建 PE/PB 历史）+ 预热财务缓存。
@@ -139,7 +139,7 @@ async function main() {
       `- 现价：${alert.price}`,
       `- 时间：${new Date(alert.ts).toLocaleString("zh-CN")}`,
       "",
-      "*来自 司南工作台 · 重点个股盯盘*",
+      "*来自 司南工作台 · 每日复盘盯盘*",
     ].join("\n");
     const result = await pushServerChan(sendKey, title, desp);
     if (result.ok) {

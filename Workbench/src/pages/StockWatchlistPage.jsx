@@ -347,9 +347,9 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
   return (
     <div className={`page page--watchlist${viewMode === "list" ? " page--watchlist-density" : ""}`}>
       <PageHeader
-        eyebrow="STOCKS · RESEARCH DESK"
-        title="重点个股"
-        description="科技半导体三大板块。AI 按研究方法论打底座：事实梳理、四维评级、多空摆一张表、私董会找反证、验证节点盯证伪——判断留给你。研究辅助，不构成投资建议。"
+        eyebrow="MARKET · DAILY REVIEW"
+        title="每日复盘"
+        description="每日复盘各大指数走势与当日重要事件；下方保留科技半导体个股清单——AI 按研究方法论打底座，判断留给你。研究辅助，不构成投资建议。"
         aside={headerAside}
       />
 

@@ -189,7 +189,7 @@ export function OverviewPage({ onOpenDocument }) {
           <MetricStat
             label="关注个股"
             value={watchlist?.source === "live" ? watchlist.data?.total ?? 0 : null}
-            hint="重点个股"
+            hint="每日复盘"
             onClick={() => navigate("/stocks")}
           />
         ) : null}

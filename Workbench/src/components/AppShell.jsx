@@ -28,7 +28,7 @@ const primaryNavigation = [
     ? [{ to: "/career", label: "求职备战", icon: IconBriefcase }]
     : []),
   ...(localWorkbench
-    ? [{ to: "/stocks", label: "重点个股", icon: IconChartCandle }]
+    ? [{ to: "/stocks", label: "每日复盘", icon: IconChartCandle }]
     : []),
   { to: "/topics", label: "灵感库", icon: IconBulb },
 ];

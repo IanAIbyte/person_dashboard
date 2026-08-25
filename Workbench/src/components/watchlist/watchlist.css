@@ -1,4 +1,4 @@
-/* 重点个股页面样式 —— 全部复用 :root 变量，块名前缀 watchlist-。 */
+/* 每日复盘（原重点个股）页面样式 —— 全部复用 :root 变量，块名前缀 watchlist-。 */
 
 .page--watchlist {
   display: flex;
