@@ -22,61 +22,6 @@ function pctClass(value) {
   return value > 0 ? "review-up" : value < 0 ? "review-down" : "review-flat";
 }
 
-// 双击就地编辑单元格：回车/失焦提交，Esc 取消。validate 返回 false 则回退不发请求。
-function EditableCell({
-  value,
-  onCommit,
-  type = "text",
-  validate = null,
-  className = "",
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-
-  const start = (event) => {
-    event.stopPropagation();
-    setDraft(value);
-    setEditing(true);
-  };
-
-  if (editing) {
-    const commit = () => {
-      const next = type === "number" ? Number(draft) : draft.trim();
-      setEditing(false);
-      if (String(next) === String(value)) return;
-      if (validate && !validate(next)) return;
-      onCommit(next);
-    };
-    const cancel = () => setEditing(false);
-    return (
-      <input
-        autoFocus
-        className={`review-portfolio__edit-input ${className}`}
-        onBlur={commit}
-        onChange={(e) => setDraft(e.target.value)}
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") commit();
-          else if (e.key === "Escape") cancel();
-        }}
-        type={type}
-        value={draft}
-      />
-    );
-  }
-
-  return (
-    <span
-      className={`review-portfolio__editable ${className}`}
-      onClick={(e) => e.stopPropagation()}
-      onDoubleClick={start}
-      title="双击修改"
-    >
-      {value ?? "—"}
-    </span>
-  );
-}
-
 function PositionForm({ stocks, editing, onDone, onCancel }) {
   const [code, setCode] = useState(editing?.code ?? "");
   const [name, setName] = useState(editing?.name ?? "");
@@ -246,14 +191,6 @@ function PositionRow({ position, maxWeight, onEdit, onReload }) {
     ? Math.max(4, (position.weight / maxWeight) * 100)
     : 0;
 
-  // 双击单元格就地保存；服务端校验失败时静默，重载后回显真实状态。
-  const commitField = async (patch) => {
-    try {
-      await updatePosition(position.id, patch);
-      onReload();
-    } catch { /* 保留原值 */ }
-  };
-
   return (
     <>
       <tr
@@ -262,19 +199,8 @@ function PositionRow({ position, maxWeight, onEdit, onReload }) {
       >
         <td className="review-portfolio__name">
           <div>
-            <strong>
-              <EditableCell
-                value={position.name ?? position.code}
-                onCommit={(next) => commitField({ name: next })}
-              />
-            </strong>
-            <span className="review-portfolio__code">
-              <EditableCell
-                value={position.code}
-                className="review-portfolio__edit-code"
-                onCommit={(next) => commitField({ code: next })}
-              />
-            </span>
+            <strong>{position.name ?? position.code}</strong>
+            <span className="review-portfolio__code">{position.code}</span>
           </div>
           <div className="review-portfolio__weight" title={`仓位占比 ${position.weight ?? "?"}%`}>
             <span style={{ width: `${weightWidth}%` }} />
@@ -282,20 +208,10 @@ function PositionRow({ position, maxWeight, onEdit, onReload }) {
           </div>
         </td>
         <td className="review-portfolio__num" onClick={(e) => e.stopPropagation()}>
-          <EditableCell
-            type="number"
-            value={position.shares}
-            onCommit={(next) => commitField({ shares: next })}
-            validate={(v) => Number.isInteger(v) && v > 0}
-          />
+          {position.shares}
         </td>
         <td className="review-portfolio__num" onClick={(e) => e.stopPropagation()}>
-          <EditableCell
-            type="number"
-            value={position.costPrice}
-            onCommit={(next) => commitField({ costPrice: next })}
-            validate={(v) => v > 0}
-          />
+          {position.costPrice}
         </td>
         <td className="review-portfolio__num">{quote?.price ?? "—"}</td>
         <td className="review-portfolio__num">{position.marketValue ?? "—"}</td>
