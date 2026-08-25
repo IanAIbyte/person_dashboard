@@ -236,8 +236,8 @@ ${entityText}
     });
   }
 
-  // 每日复盘（基于关注股 + 行情 + 定位 + 各股监控清单，不依赖逐股新闻）。
-  async function startReview({ stocks = [] }) {
+  // 每日复盘（关注股 + 指数 + 当日事件时间线 + 各股监控清单，不依赖逐股新闻）。
+  async function startReview({ stocks = [], indices = [], events = [] }) {
     return start(async () => {
       const withCode = stocks.filter((s) => s.code);
       const quoteMap = withCode.length
@@ -255,14 +255,27 @@ ${entityText}
         return `- ${s.name}${s.code ? `（${s.code}）` : ""}｜${s.note ?? ""}｜${price}${monitors ? `｜监控：${monitors}` : ""}`;
       }).join("\n");
 
+      const indexLines = indices
+        .map((i) => `- ${i.name}｜${i.changePct ?? "?"}%${i.note ? `｜${i.note}` : ""}`)
+        .join("\n");
+      const eventLines = events
+        .map((e) => `- [${e.ts?.slice(11, 16) ?? "?"}] ${e.source ?? ""} ${e.title ?? ""}${e.changePct != null ? `（${e.changePct}%）` : ""}`)
+        .join("\n");
+
       const prompt = `请基于下面的「重点关注个股清单」生成一份每日复盘，严格输出 JSON（不要 markdown 围栏）：
 
 【关注清单】
 ${lines || "（空）"}
 
+【今日指数】
+${indexLines || "（空）"}
+
+【当日事件时间线】
+${eventLines || "（空）"}
+
 请输出 JSON，字段如下（值用中文，简洁）：
 {
-  "overview": "整体一句话点评（100 字内）",
+  "overview": "整体一句话点评（100 字内，先讲指数与大盘节奏，再讲持仓）",
   "notable": ["2-4 条值得注意的个股或板块观察（结合涨跌幅与定位）"],
   "risks": ["2-3 条整体风险提示"],
   "actions": ["2-3 条建议的后续跟踪动作（非买卖指令）"],

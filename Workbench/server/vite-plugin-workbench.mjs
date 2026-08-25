@@ -57,6 +57,10 @@ import {
 } from "./materials.mjs";
 import { booksPayload } from "./books.mjs";
 import { careerPayload, careerRelativePathFromId, readCareerDocument } from "./career.mjs";
+import { createReviewEventsRepository, REVIEW_EVENTS_PATH } from "./review-events.mjs";
+import { createDailyReviewStore, DAILY_REVIEW_PATH } from "./daily-review-store.mjs";
+import { createDailyReviewService } from "./daily-review.mjs";
+import { loadDailyReviewConfig } from "./daily-review-config.mjs";
 import {
   obsidianGraphPayload,
   obsidianRelativePathFromId,
@@ -898,6 +902,15 @@ export function workbenchApiPlugin({
     marketService: marketData,
   });
   const wikiIngest = createWikiIngestRunner({ vaultRoot });
+  const reviewEvents = createReviewEventsRepository({ vaultRoot });
+  const dailyReviewStore = createDailyReviewStore({ vaultRoot });
+  const dailyReview = createDailyReviewService({
+    marketService: marketData,
+    loadConfig: () => loadDailyReviewConfig(workbenchRoot),
+    readAlerts: () => readWatchdogState("alerts", { items: [] }),
+    eventsRepo: reviewEvents,
+    reviewStore: dailyReviewStore,
+  });
   const readerExplanations = readerExplanationService ??
     createReaderExplanationsService({ vaultRoot });
   const vaultSync = createVaultSyncService({ vaultRoot });
@@ -1967,15 +1980,130 @@ export function workbenchApiPlugin({
             return json(res, 202, task);
           }
 
+          if (req.method === "GET" && url.pathname === "/api/daily-review/indices") {
+            const date = url.searchParams.get("date") ?? null;
+            return json(res, 200, await dailyReview.getIndices(date));
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/daily-review/kline") {
+            const symbol = url.searchParams.get("symbol") ?? "";
+            const days = Number(url.searchParams.get("days") ?? 60);
+            try {
+              return json(res, 200, await dailyReview.getIndexDaily(symbol, days));
+            } catch (error) {
+              if (error?.code === "INDEX_NOT_ALLOWED") {
+                return json(res, 400, { error: { message: error.message } });
+              }
+              throw error;
+            }
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/daily-review/timeline") {
+            const date = url.searchParams.get("date") ?? null;
+            return json(res, 200, await dailyReview.getTimeline(date));
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/daily-review/events") {
+            const date = url.searchParams.get("date");
+            return json(res, 200, { items: await reviewEvents.list(date ? { date } : {}) });
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/daily-review/events") {
+            const body = await readJson(req, 8 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["ts", "title", "note", "tone"]),
+              "INVALID_REVIEW_EVENT_REQUEST",
+            );
+            try {
+              const event = await reviewEvents.add(body);
+              vaultSync.notifyPaths([REVIEW_EVENTS_PATH]);
+              return json(res, 201, event);
+            } catch (error) {
+              return json(res, 400, { error: { message: error?.message || "事件无效。" } });
+            }
+          }
+
+          const reviewEventMatch = url.pathname.match(
+            /^\/api\/daily-review\/events\/([^/]+)$/,
+          );
+          if (reviewEventMatch) {
+            const id = decodeURIComponent(reviewEventMatch[1]);
+            if (req.method === "PUT") {
+              const body = await readJson(req, 8 * 1024);
+              assertAllowedObjectKeys(
+                body,
+                new Set(["ts", "title", "note", "tone"]),
+                "INVALID_REVIEW_EVENT_REQUEST",
+              );
+              const updated = await reviewEvents.update(id, body);
+              if (!updated) return json(res, 404, { error: { message: "事件不存在。" } });
+              vaultSync.notifyPaths([REVIEW_EVENTS_PATH]);
+              return json(res, 200, updated);
+            }
+            if (req.method === "DELETE") {
+              const removed = await reviewEvents.remove(id);
+              if (!removed) return json(res, 404, { error: { message: "事件不存在。" } });
+              vaultSync.notifyPaths([REVIEW_EVENTS_PATH]);
+              return json(res, 200, { removed: true });
+            }
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/daily-review/summary") {
+            const date = url.searchParams.get("date") ?? "";
+            const entry = await dailyReviewStore.get(date);
+            return json(res, 200, { entry });
+          }
+
+          const reviewSummaryMatch = url.pathname.match(
+            /^\/api\/daily-review\/summary\/([^/]+)$/,
+          );
+          if (req.method === "PUT" && reviewSummaryMatch) {
+            const date = decodeURIComponent(reviewSummaryMatch[1]);
+            const body = await readJson(req, 32 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["stockCount", "review"]),
+              "INVALID_REVIEW_SUMMARY_REQUEST",
+            );
+            try {
+              const entry = await dailyReviewStore.save(date, body);
+              vaultSync.notifyPaths([DAILY_REVIEW_PATH]);
+              return json(res, 200, entry);
+            } catch (error) {
+              return json(res, 400, { error: { message: error?.message || "总结无效。" } });
+            }
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/daily-review/generate") {
+            const body = await readJson(req, 16 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["stocks", "date"]),
+              "INVALID_REVIEW_GENERATE_REQUEST",
+            );
+            const context = await dailyReview.collectReviewContext(
+              typeof body.date === "string" ? body.date : null,
+            );
+            const task = await stockAnalysis.startReview({
+              stocks: Array.isArray(body.stocks) ? body.stocks : [],
+              indices: context.indices,
+              events: context.events,
+            });
+            return json(res, 202, task);
+          }
+
           if (req.method === "POST" && url.pathname === "/api/stock-analysis/review") {
             const body = await readJson(req, 128 * 1024);
             assertAllowedObjectKeys(
               body,
-              new Set(["stocks"]),
+              new Set(["stocks", "indices", "events"]),
               "INVALID_STOCK_REVIEW_REQUEST",
             );
             const task = await stockAnalysis.startReview({
               stocks: Array.isArray(body.stocks) ? body.stocks : [],
+              indices: Array.isArray(body.indices) ? body.indices : [],
+              events: Array.isArray(body.events) ? body.events : [],
             });
             return json(res, 202, task);
           }
