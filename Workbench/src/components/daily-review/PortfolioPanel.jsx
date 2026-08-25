@@ -290,6 +290,7 @@ export function PortfolioPanel({ stocks = [] }) {
       </div>
 
       <PositionForm
+        key={editing?.id ?? "new"}
         editing={editing}
         stocks={stocks}
         onCancel={() => setEditingId(null)}
