@@ -38,7 +38,7 @@ function fail(code, message, details) {
   throw new DailyReviewStoreError(code, message, details);
 }
 
-const SUMMARY_KEYS = ["overview", "notable", "risks", "actions", "verifications"];
+const MAX_LIST_ITEMS = 50;
 
 function normalizeText(value) {
   if (value == null || value === "") return null;
@@ -46,6 +46,47 @@ function normalizeText(value) {
     fail("INVALID_REVIEW_SUMMARY", "总结字段无效或过长。");
   }
   return value.trim() || null;
+}
+
+// LLM 输出的 notable/risks/actions 是字符串数组；容忍单个字符串入参。
+function normalizeTextList(value) {
+  if (value == null || value === "") return null;
+  const raw = Array.isArray(value) ? value : [value];
+  const items = [];
+  for (const entry of raw) {
+    if (typeof entry !== "string") {
+      fail("INVALID_REVIEW_SUMMARY", "总结列表项必须是字符串。");
+    }
+    const trimmed = entry.trim();
+    if (!trimmed) continue;
+    if (trimmed.length > MAX_TEXT_LENGTH) {
+      fail("INVALID_REVIEW_SUMMARY", "总结列表项过长。");
+    }
+    items.push(trimmed);
+  }
+  if (items.length > MAX_LIST_ITEMS) {
+    fail("INVALID_REVIEW_SUMMARY", "总结列表项过多。");
+  }
+  return items.length ? items : null;
+}
+
+// verifications：[{stock, event, type, note}]，字段全部字符串化。
+function normalizeVerifications(value) {
+  if (value == null || value === "") return null;
+  if (!Array.isArray(value)) {
+    fail("INVALID_REVIEW_SUMMARY", "verifications 必须是数组。");
+  }
+  const items = value.slice(0, MAX_LIST_ITEMS).map((entry) => {
+    if (!entry || typeof entry !== "object") return null;
+    const item = {
+      stock: typeof entry.stock === "string" ? entry.stock.trim() : "",
+      event: typeof entry.event === "string" ? entry.event.trim() : "",
+      type: entry.type === "falsify" ? "falsify" : "reinforce",
+      note: typeof entry.note === "string" ? entry.note.trim() : "",
+    };
+    return item.stock || item.event ? item : null;
+  }).filter(Boolean);
+  return items.length ? items : null;
 }
 
 function normalizeDate(value) {
@@ -57,12 +98,16 @@ function normalizeDate(value) {
 
 function normalizeEntry(value) {
   if (!value || typeof value !== "object") fail("INVALID_REVIEW_SUMMARY", "总结条目无效。");
-  const review = {};
-  for (const key of SUMMARY_KEYS) {
-    const text = normalizeText(value.review?.[key]);
-    if (text) review[key] = text;
+  const source = value.review ?? value;
+  const overview = normalizeText(source.overview);
+  if (!overview) fail("INVALID_REVIEW_SUMMARY", "总结必须包含 overview。");
+  const review = { overview };
+  for (const key of ["notable", "risks", "actions"]) {
+    const list = normalizeTextList(source[key]);
+    if (list) review[key] = list;
   }
-  if (!review.overview) fail("INVALID_REVIEW_SUMMARY", "总结必须包含 overview。");
+  const verifications = normalizeVerifications(source.verifications);
+  if (verifications) review.verifications = verifications;
   return {
     date: normalizeDate(value.date),
     generatedAt: value.generatedAt ? String(value.generatedAt) : null,

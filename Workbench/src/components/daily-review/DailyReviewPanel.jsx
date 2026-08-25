@@ -278,7 +278,7 @@ function ReviewSummaryCard({ entry, stocks, date, onSaved }) {
     const timer = setInterval(async () => {
       try {
         const next = await getStockAnalysis(task.id);
-        if (next.status === "succeeded") {
+        if (next.status === "completed") {
           clearInterval(timer);
           try {
             await saveDailyReviewSummary(date, {
