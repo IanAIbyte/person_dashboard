@@ -207,12 +207,8 @@ function PositionRow({ position, maxWeight, onEdit, onReload }) {
             <em>{position.weight != null ? `${position.weight}%` : "—"}</em>
           </div>
         </td>
-        <td className="review-portfolio__num" onClick={(e) => e.stopPropagation()}>
-          {position.shares}
-        </td>
-        <td className="review-portfolio__num" onClick={(e) => e.stopPropagation()}>
-          {position.costPrice}
-        </td>
+        <td className="review-portfolio__num">{position.shares}</td>
+        <td className="review-portfolio__num">{position.costPrice}</td>
         <td className="review-portfolio__num">{quote?.price ?? "—"}</td>
         <td className="review-portfolio__num">{position.marketValue ?? "—"}</td>
         <td className={`review-portfolio__num ${pctClass(position.pnlPct)}`}>
