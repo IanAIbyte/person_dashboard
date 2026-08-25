@@ -2,6 +2,8 @@
 // 拼成页面需要的形状。所有外部依赖注入（marketService/config/alerts/repos），
 // 服务端各端点只做薄封装。
 
+import { computeMA } from "./market-data.mjs";
+
 const MAX_TIMELINE_ITEMS = 100;
 
 function localDate(now) {
@@ -28,6 +30,10 @@ function cleanIndexQuote(quote) {
     low: positiveOrNull(quote.low),
     changePct: typeof quote.changePct === "number" ? quote.changePct : null,
     amplitudePct: positiveOrNull(quote.amplitudePct),
+    // 行情层 f[37] 成交额单位为万元 → 亿。
+    turnoverYi: typeof quote.turnoverWan === "number" && quote.turnoverWan > 0
+      ? Math.round(quote.turnoverWan / 10_000)
+      : null,
     timestamp: quote.timestamp ?? null,
   };
 }
@@ -39,6 +45,7 @@ export function createDailyReviewService({
   eventsRepo,
   reviewStore,
   portfolioRepo = null,
+  newsService = null,
   now = () => Date.now(),
 } = {}) {
   if (!marketService) throw new TypeError("daily review requires a market service.");
@@ -174,6 +181,11 @@ export function createDailyReviewService({
           price,
           prevClose: quote?.prevClose ?? null,
           changePct: quote?.changePct ?? null,
+          turnoverPct: quote?.turnoverPct ?? null,
+          volumeRatio: quote?.volumeRatio ?? null,
+          turnoverYi: typeof quote?.turnoverWan === "number" && quote.turnoverWan > 0
+            ? Math.round(quote.turnoverWan / 10_000)
+            : null,
         },
         marketValue,
         pnl,
@@ -229,18 +241,88 @@ export function createDailyReviewService({
     return { code, date: resolvedDate, intraday, prevCloseReference: prevClose };
   }
 
-  // 供 LLM generate 端点取上下文。
-  async function collectReviewContext(date = null) {
+  // 供 LLM generate 端点取上下文（四段式复盘教练的输入）。
+  // watchStocks 由路由从页面关注清单传入（[{name, code, note}]）。
+  async function collectReviewContext(date = null, watchStocks = []) {
     const resolvedDate = normalizeDateParam(date, now());
     const [indicesResult, timeline, portfolio] = await Promise.all([
       getIndices(resolvedDate),
       getTimeline(resolvedDate),
       portfolioRepo ? getPortfolio() : Promise.resolve(null),
     ]);
+
     const indices = indicesResult.indices.map((index) => ({
       name: index.name,
+      close: index.quote?.price ?? null,
       changePct: index.quote?.changePct ?? null,
+      amplitudePct: index.quote?.amplitudePct ?? null,
+      turnoverYi: index.quote?.turnoverYi ?? null,
     }));
+    // 两市成交额口径：上证指数（全沪市）+ 深证成指（成分），近似值。
+    const sh = indices.find((item) => item.name === "上证指数");
+    const sz = indices.find((item) => item.name === "深证成指");
+    const market = {
+      turnoverYi: sh?.turnoverYi != null && sz?.turnoverYi != null
+        ? sh.turnoverYi + sz.turnoverYi
+        : null,
+      note: "口径：上证指数+深证成指成分合计（近似）；环比[待补充]",
+    };
+
+    // 持仓增强：均线/60日高低/近5日收盘 + 当日新闻标题。
+    const positions = [];
+    for (const row of portfolio?.positions ?? []) {
+      const klines = await marketService.getDailyKlines(row.code, 70);
+      const ma = klines.length ? computeMA(klines, [5, 20, 60]) : {};
+      const high60 = klines.length ? Math.max(...klines.map((k) => k.high)) : null;
+      const low60 = klines.length ? Math.min(...klines.map((k) => k.low)) : null;
+      let news = [];
+      if (newsService && row.code) {
+        try {
+          const result = await newsService.getStockNews({ name: row.name, code: row.code });
+          news = (result?.items ?? result ?? []).slice(0, 3)
+            .map((item) => item?.title ?? item?.name)
+            .filter(Boolean);
+        } catch { /* 新闻失败静默，prompt 标[待补充] */ }
+      }
+      positions.push({
+        name: row.name ?? row.code,
+        code: row.code,
+        shares: row.shares,
+        costPrice: row.costPrice,
+        price: row.quote?.price ?? null,
+        changePct: row.quote?.changePct ?? null,
+        turnoverPct: row.quote?.turnoverPct ?? null,
+        volumeRatio: row.quote?.volumeRatio ?? null,
+        pnlPct: row.pnlPct,
+        weight: row.weight,
+        note: row.note,
+        ma5: ma.ma5 ?? null,
+        ma20: ma.ma20 ?? null,
+        ma60: ma.ma60 ?? null,
+        high60,
+        low60,
+        last5Closes: klines.slice(-5).map((k) => k.close),
+        news,
+      });
+    }
+
+    // 关注清单增强：行情四要素。
+    const watchCodes = watchStocks.filter((s) => s?.code).map((s) => s.code);
+    const watchQuotes = watchCodes.length
+      ? await marketService.getQuotes(watchCodes)
+      : new Map();
+    const watch = watchStocks.map((stock) => {
+      const quote = stock.code ? watchQuotes.get(stock.code) ?? null : null;
+      return {
+        name: stock.name,
+        code: stock.code ?? null,
+        note: stock.note ?? null,
+        changePct: quote?.changePct ?? null,
+        turnoverPct: quote?.turnoverPct ?? null,
+        volumeRatio: quote?.volumeRatio ?? null,
+      };
+    });
+
     const events = timeline.items
       .filter((item) => item.source !== "ai")
       .map((item) => ({
@@ -249,16 +331,7 @@ export function createDailyReviewService({
         title: `${item.title} ${item.name ?? ""}`.trim(),
         changePct: item.changePct ?? null,
       }));
-    const positions = portfolio
-      ? portfolio.positions.map((row) => ({
-          name: row.name ?? row.code,
-          weight: row.weight,
-          pnlPct: row.pnlPct,
-          dayPnlPct: row.quote?.changePct ?? null,
-          note: row.note,
-        }))
-      : [];
-    return { date: resolvedDate, indices, events, positions };
+    return { date: resolvedDate, indices, market, positions, watch, events };
   }
 
   return Object.freeze({

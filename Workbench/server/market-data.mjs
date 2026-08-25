@@ -56,6 +56,7 @@ function parseLine(line) {
     changePct: numberOrNA(f[32]),
     high: numberOrNA(f[33]),
     low: numberOrNA(f[34]),
+    turnoverWan: numberOrNA(f[37]),
     turnoverPct: numberOrNA(f[38]),
     peTtm: numberOrNA(f[39]),
     amplitudePct: numberOrNA(f[43]),

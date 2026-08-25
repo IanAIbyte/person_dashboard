@@ -33,18 +33,22 @@ export function createLlmClient({
   timeoutMs = 180_000,
   maxRetries = 1,
 } = {}) {
-  async function chatCompletion({ messages, signal } = {}) {
+  async function chatCompletion({ messages, signal, timeoutMs: callTimeoutMs } = {}) {
     if (!apiKey) {
       fail("LLM_NOT_CONFIGURED", "未配置 ZHIPU_API_KEY，无法调用 AI 分析。");
     }
     if (!Array.isArray(messages) || messages.length === 0) {
       fail("INVALID_LLM_MESSAGES", "LLM 请求缺少消息。");
     }
+    // 单次调用可覆盖超时（长文生成如四段式复盘需要更长时间）。
+    const effectiveTimeoutMs = Number.isFinite(Number(callTimeoutMs)) && callTimeoutMs > 0
+      ? callTimeoutMs
+      : timeoutMs;
 
     let lastError;
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const timer = setTimeout(() => controller.abort(), effectiveTimeoutMs);
       const abortHandler = () => controller.abort();
       signal?.addEventListener?.("abort", abortHandler, { once: true });
       try {

@@ -17,6 +17,17 @@ function parseJson(content, fallback) {
   }
 }
 
+function fmtPct(value) {
+  if (value == null || !Number.isFinite(Number(value))) return "?%";
+  const n = Number(value);
+  return `${n > 0 ? "+" : ""}${n.toFixed(2)}%`;
+}
+
+function rnd(value) {
+  if (value == null || !Number.isFinite(Number(value))) return "?";
+  return Number(value).toFixed(2);
+}
+
 function systemPrompt() {
   return [
     "你是一名严谨的 A 股投资研究助手，面向个人投资者提供信息整理与风险提示。",
@@ -317,5 +328,79 @@ verifications 仅汇总清单中「监控」字段的验证节点，没有则输
     });
   }
 
-  return Object.freeze({ startSentiment, startResearch, startReview, get });
+  // 四段式复盘教练（每日复盘页面「AI 每日总结」）：输出 markdown，
+  // 数据缺口按约定标 [待补充]，事实与推测强制区分。
+  async function startCoachReview(context = {}) {
+    return start(async () => {
+      const lines = [];
+      lines.push("【今日指数】");
+      for (const index of context.indices ?? []) {
+        lines.push(`- ${index.name}｜收盘 ${index.close ?? "?"}｜${fmtPct(index.changePct)}｜振幅 ${index.amplitudePct ?? "?"}%｜成交额 ${index.turnoverYi ?? "?"} 亿`);
+      }
+      lines.push(`- 两市成交额：${context.market?.turnoverYi ?? "?"} 亿（${context.market?.note ?? ""}）`);
+      lines.push("");
+      lines.push("【当前持仓】（含技术位与成本）");
+      for (const position of context.positions ?? []) {
+        lines.push([
+          `- ${position.name}（${position.code}）｜股数 ${position.shares}｜成本 ${position.costPrice}｜现价 ${position.price ?? "?"}｜今日 ${fmtPct(position.changePct)}｜换手 ${position.turnoverPct ?? "?"}%｜量比 ${position.volumeRatio ?? "?"}｜浮盈亏 ${fmtPct(position.pnlPct)}｜权重 ${position.weight ?? "?"}%`,
+          `  均线 MA5/${rnd(position.ma5)} MA20/${rnd(position.ma20)} MA60/${rnd(position.ma60)}｜60日高 ${rnd(position.high60)} 低 ${rnd(position.low60)}｜近5日收盘 ${JSON.stringify(position.last5Closes ?? [])}｜备注 ${position.note ?? "无"}`,
+          `  当日新闻 ${position.news?.length ? position.news.join("；") : "[待补充]"}`,
+        ].join("\n"));
+      }
+      if ((context.positions ?? []).length === 0) lines.push("- （空仓）");
+      lines.push("");
+      lines.push("【关注清单】");
+      for (const stock of context.watch ?? []) {
+        lines.push(`- ${stock.name}${stock.code ? `（${stock.code}）` : ""}｜今日 ${fmtPct(stock.changePct)}｜换手 ${stock.turnoverPct ?? "?"}%｜量比 ${stock.volumeRatio ?? "?"}｜定位 ${stock.note ?? "无"}`);
+      }
+      if ((context.watch ?? []).length === 0) lines.push("- （空）");
+      lines.push("");
+      lines.push("【当日事件时间线】");
+      for (const event of context.events ?? []) {
+        lines.push(`- [${event.ts?.slice(11, 16) ?? "?"}] ${event.source} ${event.title}${event.changePct != null ? `（${event.changePct}%）` : ""}`);
+      }
+      if ((context.events ?? []).length === 0) lines.push("- （空）");
+
+      const prompt = `今天是 ${context.date ?? "[日期缺失]"}。请基于下面的真实数据，严格执行四段式复盘。你的角色：15 年实盘经验的 A 股职业操盘手兼复盘教练——数据先行、逻辑严格、只讲事实与概率；不吹票、不荐股、不迎合；发现用户逻辑漏洞或情绪化操作直接指出。
+
+${lines.join("\n")}
+
+# 输出要求（Markdown，直接以正文开始，不要代码围栏）
+
+## 一、大盘与情绪面
+指数收盘与涨跌幅；两市成交额（环比[待补充]）。赚钱效应数据（涨跌家数/涨停跌停家数/连板高度/炸板率/晋级率/领涨领跌板块/北证50）系统暂未采集，逐项标注 [待补充]，但你可以基于给出的指数与振幅数据做有限的情绪推断，推断必须以「判断：」前缀并附依据与置信度（高/中/低）。用「冰点→回暖→发酵→高潮→分歧→退潮」框架定位当前情绪阶段，并给明日倾向预判（同样走「判断：」格式）。当日事件时间线为消息面素材。
+
+## 二、持仓个股诊断（逐只，勿遗漏）
+每只小节呈现：当日表现（涨跌幅/换手/量比/相对成本浮盈%）；技术面（日K形态一句话、关键支撑与压力位——必须基于给出的 60日高低/均线/近5日收盘给具体价位并注明依据，均线多空排列）；量价信号（放量上涨/缩量回调/放量滞涨/破位下跌四选一）；消息面（基于给出的当日新闻，无则[待补充]）；逻辑检验（对照备注的买入定位，被验证/中性/被破坏三选一）；操作建议（持有/加仓/减仓/清仓倾向+触发条件=具体价位+盘面信号+止损位）。所有建议必须同时附触发与失效条件，禁用「必涨」类表述。
+
+## 三、关注列表跟踪（逐只）
+当日表现一句话；距触发买点多远（基于现价与定位推断，价格距离%或等待什么信号）；结论三选一（继续观察/接近买点/逻辑走弱建议移出）。量比>2 或涨跌幅超±5% 的标注 ⚡ 并展开 3-5 句。
+
+## 四、明日作战计划
+大盘强势/中性/弱势三情景及粗略概率（「判断：」格式）与总仓位框架；每只持仓的明日预案（触发价/动作/仓位变化量/失效条件）；关注列表到达什么价位或信号可关注哪只（建议观察仓位与止损位）；2-3 个明日风险点（基于已有信息合理列出，无足够信息则说明）。
+
+# 硬约束
+1. 价格 2 位小数、百分比 2 位小数；事实直接陈述，推测必须「判断：」前缀+依据+置信度。
+2. 数据缺口标 [待补充]，严禁编造任何价格、成交量、新闻、公告。
+3. 不迎合既有观点：持仓逻辑若已破坏而用户未察觉，直接点明。
+4. 结尾用不超过 3 句话总结今日复盘核心结论（以「**今日核心**：」开头）。`;
+
+      const content = await llmClient.chatCompletion({
+        messages: [
+          { role: "system", content: systemPrompt() },
+          { role: "user", content: prompt },
+        ],
+        // 四段式长文 + 27 只关注股逐只跟踪，生成耗时显著长于普通总结。
+        timeoutMs: 420_000,
+      });
+      const markdown = content.trim();
+      return {
+        generatedAt: new Date().toISOString(),
+        markdown,
+        overview: markdown.replace(/[#*`>\-]/g, "").slice(0, 120),
+      };
+    });
+  }
+
+  return Object.freeze({ startSentiment, startResearch, startReview, startCoachReview, get });
 }

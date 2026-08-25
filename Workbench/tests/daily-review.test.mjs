@@ -58,6 +58,15 @@ test("daily review store overrides by date and keeps last 30 entries", async () 
     () => store.save("2026-8-25", { review: { overview: "x" } }),
     /YYYY-MM-DD/,
   );
+  // 四段式复盘教练的 markdown 正文可落盘，超长拒绝。
+  const coached = await store.save("2026-08-25", {
+    review: { overview: "摘要", markdown: "## 一、大盘与情绪面\n[待补充]" },
+  });
+  assert.equal(coached.review.markdown, "## 一、大盘与情绪面\n[待补充]");
+  await assert.rejects(
+    () => store.save("2026-08-26", { review: { overview: "x", markdown: "a".repeat(20_001) } }),
+    /长度/,
+  );
 
   const first = await store.save("2026-08-25", { review: { overview: "第一版" } });
   assert.equal(first.review.overview, "第一版");

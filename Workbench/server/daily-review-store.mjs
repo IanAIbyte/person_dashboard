@@ -39,6 +39,7 @@ function fail(code, message, details) {
 }
 
 const MAX_LIST_ITEMS = 50;
+const MAX_MARKDOWN_LENGTH = 20_000;
 
 function normalizeText(value) {
   if (value == null || value === "") return null;
@@ -102,6 +103,13 @@ function normalizeEntry(value) {
   const overview = normalizeText(source.overview);
   if (!overview) fail("INVALID_REVIEW_SUMMARY", "总结必须包含 overview。");
   const review = { overview };
+  // 四段式复盘教练的完整 markdown 正文（新契约；旧结构化总结没有该字段）。
+  if (source.markdown != null && source.markdown !== "") {
+    if (typeof source.markdown !== "string" || source.markdown.length > MAX_MARKDOWN_LENGTH) {
+      fail("INVALID_REVIEW_SUMMARY", "复盘正文无效或超过长度上限。");
+    }
+    review.markdown = source.markdown;
+  }
   for (const key of ["notable", "risks", "actions"]) {
     const list = normalizeTextList(source[key]);
     if (list) review[key] = list;

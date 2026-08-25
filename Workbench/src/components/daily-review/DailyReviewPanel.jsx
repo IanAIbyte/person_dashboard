@@ -3,6 +3,8 @@
 // vault 状态文件变更会经 Routes key 重挂载自动刷新，无需额外轮询。
 
 import { useCallback, useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   IconPlus,
   IconSparkles,
@@ -327,7 +329,13 @@ function ReviewSummaryCard({ entry, stocks, date, onSaved }) {
       </div>
       {review ? (
         <div className="review-summary__body">
-          <p className="review-summary__overview">{review.overview}</p>
+          {review.markdown ? (
+            <div className="review-summary__markdown">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{review.markdown}</ReactMarkdown>
+            </div>
+          ) : (
+            <p className="review-summary__overview">{review.overview}</p>
+          )}
           {review.notable?.length ? (
             <div><h4>值得注意</h4><ul>{review.notable.map((text, i) => <li key={i}>{text}</li>)}</ul></div>
           ) : null}

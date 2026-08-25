@@ -913,6 +913,7 @@ export function workbenchApiPlugin({
     eventsRepo: reviewEvents,
     reviewStore: dailyReviewStore,
     portfolioRepo,
+    newsService: stockNews,
   });
   const readerExplanations = readerExplanationService ??
     createReaderExplanationsService({ vaultRoot });
@@ -2143,13 +2144,9 @@ export function workbenchApiPlugin({
             );
             const context = await dailyReview.collectReviewContext(
               typeof body.date === "string" ? body.date : null,
+              Array.isArray(body.stocks) ? body.stocks : [],
             );
-            const task = await stockAnalysis.startReview({
-              stocks: Array.isArray(body.stocks) ? body.stocks : [],
-              indices: context.indices,
-              events: context.events,
-              positions: context.positions,
-            });
+            const task = await stockAnalysis.startCoachReview(context);
             return json(res, 202, task);
           }
 

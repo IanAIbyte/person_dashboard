@@ -188,6 +188,31 @@ test("startResearch falls back to a minimal structure when the LLM output is not
   assert.ok(task.result.facts.limitations.includes("纯文本"));
 });
 
+test("startCoachReview renders four-part markdown from context data", async () => {
+  const service = createStockAnalysisService({
+    llmClient: mockLlm("## 一、大盘与情绪面\n沪指收涨。\n**今日核心**：分化。"),
+  });
+  const started = await service.startCoachReview({
+    date: "2026-08-25",
+    indices: [{ name: "上证指数", close: 3889.44, changePct: 0.19, amplitudePct: 1.17, turnoverYi: 5800 }],
+    market: { turnoverYi: 12000, note: "近似" },
+    positions: [{
+      name: "沪电股份", code: "002463", shares: 1100, costPrice: 119.5, price: 114.29,
+      changePct: -1.11, turnoverPct: 2.6, volumeRatio: 0.9, pnlPct: -4.36, weight: 61,
+      note: "PCB 主力", ma5: 118, ma20: 120, ma60: 115, high60: 132, low60: 100,
+      last5Closes: [117, 116, 115.5, 114.3, 114.29], news: ["某新闻"],
+    }],
+    watch: [{ name: "长鑫存储", code: "688825", note: "国产存储", changePct: -0.18, turnoverPct: 6.13, volumeRatio: 0.65 }],
+    events: [{ ts: "2026-08-25T06:30:00.000Z", source: "手动", title: "午后回落", changePct: null }],
+  });
+  const task = await waitForTask(service, started.id);
+
+  assert.equal(task.status, "completed");
+  assert.equal(task.result.markdown, "## 一、大盘与情绪面\n沪指收涨。\n**今日核心**：分化。");
+  assert.ok(task.result.overview.length > 0);
+  assert.ok(task.result.overview.length <= 120);
+});
+
 test("startReview keeps monitor context and parses verification nodes", async () => {
   const service = createStockAnalysisService({
     llmClient: mockLlm(JSON.stringify({
