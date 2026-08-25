@@ -695,6 +695,76 @@ export function getStockAnalysis(id) {
   return request(`/api/stock-analysis/${encodeURIComponent(id)}`);
 }
 
+const emptyReviewIndices = { date: null, indices: [] };
+const emptyReviewTimeline = { date: null, items: [] };
+const emptyReviewKline = { symbol: null, days: 60, klines: [] };
+
+export function loadDailyReviewIndices(date = null) {
+  const query = date ? `?date=${encodeURIComponent(date)}` : "";
+  return withFallback(
+    () => cachedGet(`/api/daily-review/indices${query}`, 60_000),
+    () => emptyReviewIndices,
+  );
+}
+
+export function loadDailyReviewKline(symbol, days = 60) {
+  return withFallback(
+    () => cachedGet(
+      `/api/daily-review/kline?symbol=${encodeURIComponent(symbol)}&days=${days}`,
+      10 * 60_000,
+    ),
+    () => ({ ...emptyReviewKline, symbol }),
+  );
+}
+
+export function loadDailyReviewTimeline(date = null) {
+  const query = date ? `?date=${encodeURIComponent(date)}` : "";
+  return withFallback(
+    () => cachedGet(`/api/daily-review/timeline${query}`, 30_000),
+    () => emptyReviewTimeline,
+  );
+}
+
+export function loadDailyReviewSummary(date) {
+  return withFallback(
+    () => cachedGet(`/api/daily-review/summary?date=${encodeURIComponent(date)}`, 60_000),
+    () => ({ entry: null }),
+  );
+}
+
+export async function addReviewEvent(payload) {
+  const event = await request("/api/daily-review/events", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  invalidateCache("/api/daily-review");
+  return event;
+}
+
+export async function removeReviewEvent(id) {
+  const result = await request(`/api/daily-review/events/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  invalidateCache("/api/daily-review");
+  return result;
+}
+
+export async function saveDailyReviewSummary(date, payload) {
+  const entry = await request(`/api/daily-review/summary/${encodeURIComponent(date)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+  invalidateCache("/api/daily-review");
+  return entry;
+}
+
+export function startDailyReviewGenerate(stocks, date = null) {
+  return request("/api/daily-review/generate", {
+    method: "POST",
+    body: JSON.stringify({ stocks, ...(date ? { date } : {}) }),
+  });
+}
+
 export function loadSocialInsight(reportId) {
   return withFallback(
     () => request(`/api/social-insights/${encodeURIComponent(reportId)}`),

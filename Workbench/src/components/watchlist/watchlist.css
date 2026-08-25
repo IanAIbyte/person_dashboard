@@ -1,5 +1,14 @@
 /* 每日复盘（原重点个股）页面样式 —— 全部复用 :root 变量，块名前缀 watchlist-。 */
 
+.watchlist-section-title {
+  margin: 0 0 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+
 .page--watchlist {
   display: flex;
   flex-direction: column;

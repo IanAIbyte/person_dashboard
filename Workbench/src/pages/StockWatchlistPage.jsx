@@ -38,6 +38,7 @@ import {
   updateWatchdogConfig,
 } from "../lib/api";
 import "../components/watchlist/watchlist.css";
+import { DailyReviewPanel } from "../components/daily-review/DailyReviewPanel";
 
 function formatPct(value) {
   if (value == null || Number.isNaN(Number(value))) return "—";
@@ -352,6 +353,12 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
         description="每日复盘各大指数走势与当日重要事件；下方保留科技半导体个股清单——AI 按研究方法论打底座，判断留给你。研究辅助，不构成投资建议。"
         aside={headerAside}
       />
+
+      <DailyReviewPanel stocks={allStocks} />
+
+      <div className="watchlist-section-title" role="heading" aria-level={2}>
+        个股清单
+      </div>
 
       <div className="watchlist-toolbar">
         <span className="watchlist-source">
@@ -1212,7 +1219,8 @@ function AlertsPanel() {
     return () => { cancelled = true; };
   }, []);
 
-  const items = result.data?.items ?? [];
+  // 指数异动已在复盘时间线展示，异动中心只保留个股事件避免重复。
+  const items = (result.data?.items ?? []).filter((item) => item.scope !== "index");
   const typeLabel = { surge: "急拉", plunge: "急跌", limitUp: "涨停", limitDown: "跌停" };
   const typeClass = { surge: "up", plunge: "down", limitUp: "up", limitDown: "down" };
 
