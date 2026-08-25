@@ -61,6 +61,7 @@ import { createReviewEventsRepository, REVIEW_EVENTS_PATH } from "./review-event
 import { createDailyReviewStore, DAILY_REVIEW_PATH } from "./daily-review-store.mjs";
 import { createDailyReviewService } from "./daily-review.mjs";
 import { loadDailyReviewConfig } from "./daily-review-config.mjs";
+import { createPortfolioRepository, PORTFOLIO_PATH } from "./portfolio.mjs";
 import {
   obsidianGraphPayload,
   obsidianRelativePathFromId,
@@ -904,12 +905,14 @@ export function workbenchApiPlugin({
   const wikiIngest = createWikiIngestRunner({ vaultRoot });
   const reviewEvents = createReviewEventsRepository({ vaultRoot });
   const dailyReviewStore = createDailyReviewStore({ vaultRoot });
+  const portfolioRepo = createPortfolioRepository({ vaultRoot });
   const dailyReview = createDailyReviewService({
     marketService: marketData,
     loadConfig: () => loadDailyReviewConfig(workbenchRoot),
     readAlerts: () => readWatchdogState("alerts", { items: [] }),
     eventsRepo: reviewEvents,
     reviewStore: dailyReviewStore,
+    portfolioRepo,
   });
   const readerExplanations = readerExplanationService ??
     createReaderExplanationsService({ vaultRoot });
@@ -1985,6 +1988,62 @@ export function workbenchApiPlugin({
             return json(res, 200, await dailyReview.getIndices(date));
           }
 
+          if (req.method === "GET" && url.pathname === "/api/daily-review/intraday") {
+            const code = url.searchParams.get("code") ?? "";
+            const date = url.searchParams.get("date") ?? null;
+            try {
+              return json(res, 200, await dailyReview.getStockIntraday(code, date));
+            } catch (error) {
+              if (error?.code === "INVALID_STOCK_CODE") {
+                return json(res, 400, { error: { message: error.message } });
+              }
+              throw error;
+            }
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/portfolio") {
+            return json(res, 200, await dailyReview.getPortfolio());
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/portfolio") {
+            const body = await readJson(req, 4 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["code", "name", "shares", "costPrice", "openedAt", "targetPrice", "stopPrice", "note"]),
+              "INVALID_PORTFOLIO_REQUEST",
+            );
+            try {
+              const position = await portfolioRepo.add(body);
+              vaultSync.notifyPaths([PORTFOLIO_PATH]);
+              return json(res, 201, position);
+            } catch (error) {
+              return json(res, 400, { error: { message: error?.message || "持仓无效。" } });
+            }
+          }
+
+          const portfolioMatch = url.pathname.match(/^\/api\/portfolio\/([^/]+)$/);
+          if (portfolioMatch) {
+            const id = decodeURIComponent(portfolioMatch[1]);
+            if (req.method === "PUT") {
+              const body = await readJson(req, 4 * 1024);
+              assertAllowedObjectKeys(
+                body,
+                new Set(["code", "name", "shares", "costPrice", "openedAt", "targetPrice", "stopPrice", "note", "closedAt", "closedPrice"]),
+                "INVALID_PORTFOLIO_REQUEST",
+              );
+              const updated = await portfolioRepo.update(id, body);
+              if (!updated) return json(res, 404, { error: { message: "持仓不存在。" } });
+              vaultSync.notifyPaths([PORTFOLIO_PATH]);
+              return json(res, 200, updated);
+            }
+            if (req.method === "DELETE") {
+              const removed = await portfolioRepo.remove(id);
+              if (!removed) return json(res, 404, { error: { message: "持仓不存在。" } });
+              vaultSync.notifyPaths([PORTFOLIO_PATH]);
+              return json(res, 200, { removed: true });
+            }
+          }
+
           if (req.method === "GET" && url.pathname === "/api/daily-review/kline") {
             const symbol = url.searchParams.get("symbol") ?? "";
             const days = Number(url.searchParams.get("days") ?? 60);
@@ -2089,6 +2148,7 @@ export function workbenchApiPlugin({
               stocks: Array.isArray(body.stocks) ? body.stocks : [],
               indices: context.indices,
               events: context.events,
+              positions: context.positions,
             });
             return json(res, 202, task);
           }

@@ -765,6 +765,49 @@ export function startDailyReviewGenerate(stocks, date = null) {
   });
 }
 
+const emptyPortfolio = { positions: [], totals: null, closed: [] };
+
+export function loadPortfolio() {
+  return withFallback(
+    () => cachedGet("/api/portfolio", 60_000),
+    () => emptyPortfolio,
+  );
+}
+
+export function loadStockIntraday(code, date = null) {
+  const query = date ? `&date=${encodeURIComponent(date)}` : "";
+  return withFallback(
+    () => cachedGet(`/api/daily-review/intraday?code=${encodeURIComponent(code)}${query}`, 60_000),
+    () => ({ code, date: null, intraday: [], prevCloseReference: null }),
+  );
+}
+
+export async function addPosition(payload) {
+  const position = await request("/api/portfolio", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  invalidateCache("/api/portfolio");
+  return position;
+}
+
+export async function updatePosition(id, patch) {
+  const position = await request(`/api/portfolio/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(patch),
+  });
+  invalidateCache("/api/portfolio");
+  return position;
+}
+
+export async function removePosition(id) {
+  const result = await request(`/api/portfolio/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  invalidateCache("/api/portfolio");
+  return result;
+}
+
 export function loadSocialInsight(reportId) {
   return withFallback(
     () => request(`/api/social-insights/${encodeURIComponent(reportId)}`),

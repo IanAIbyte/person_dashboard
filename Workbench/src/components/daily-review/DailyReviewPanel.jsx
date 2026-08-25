@@ -43,7 +43,7 @@ function pctClass(value) {
   return value > 0 ? "review-up" : value < 0 ? "review-down" : "review-flat";
 }
 
-function IntradayChart({ intraday, prevClose }) {
+export function IntradayChart({ intraday, prevClose }) {
   if (!intraday || intraday.length === 0) {
     return <div className="review-chart review-chart--empty">暂无分时数据</div>;
   }
@@ -351,7 +351,7 @@ function ReviewSummaryCard({ entry, stocks, date, onSaved }) {
   );
 }
 
-export function DailyReviewPanel({ stocks = [] }) {
+export function DailyReviewPanel({ stocks = [], portfolioSlot = null }) {
   const [indicesResult, setIndicesResult] = useState({ data: null, source: "loading" });
   const [timelineResult, setTimelineResult] = useState({ data: null, source: "loading" });
   const [date] = useState(() => new Date().toISOString().slice(0, 10));
@@ -385,6 +385,8 @@ export function DailyReviewPanel({ stocks = [] }) {
           </div>
         )}
       </div>
+
+      {portfolioSlot}
 
       <ReviewSummaryCard entry={aiEntry} stocks={stocks} date={date} onSaved={reload} />
 

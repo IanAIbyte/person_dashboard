@@ -236,8 +236,8 @@ ${entityText}
     });
   }
 
-  // 每日复盘（关注股 + 指数 + 当日事件时间线 + 各股监控清单，不依赖逐股新闻）。
-  async function startReview({ stocks = [], indices = [], events = [] }) {
+  // 每日复盘（关注股 + 指数 + 当前持仓 + 当日事件时间线 + 各股监控清单）。
+  async function startReview({ stocks = [], indices = [], events = [], positions = [] }) {
     return start(async () => {
       const withCode = stocks.filter((s) => s.code);
       const quoteMap = withCode.length
@@ -258,6 +258,14 @@ ${entityText}
       const indexLines = indices
         .map((i) => `- ${i.name}｜${i.changePct ?? "?"}%${i.note ? `｜${i.note}` : ""}`)
         .join("\n");
+      const positionLines = positions
+        .map((p) => {
+          const weight = p.weight != null ? `权重 ${p.weight}%` : "权重 ?";
+          const pnl = p.pnlPct != null ? `${p.pnlPct > 0 ? "+" : ""}${p.pnlPct}%` : "?";
+          const day = p.dayPnlPct != null ? `当日 ${p.dayPnlPct > 0 ? "+" : ""}${p.dayPnlPct}%` : "当日 ?";
+          return `- ${p.name}｜${weight}｜浮盈亏 ${pnl}｜${day}${p.note ? `｜${p.note}` : ""}`;
+        })
+        .join("\n");
       const eventLines = events
         .map((e) => `- [${e.ts?.slice(11, 16) ?? "?"}] ${e.source ?? ""} ${e.title ?? ""}${e.changePct != null ? `（${e.changePct}%）` : ""}`)
         .join("\n");
@@ -269,6 +277,9 @@ ${lines || "（空）"}
 
 【今日指数】
 ${indexLines || "（空）"}
+
+【当前持仓】
+${positionLines || "（空）"}
 
 【当日事件时间线】
 ${eventLines || "（空）"}

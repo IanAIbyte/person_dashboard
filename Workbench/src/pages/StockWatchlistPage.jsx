@@ -39,6 +39,7 @@ import {
 } from "../lib/api";
 import "../components/watchlist/watchlist.css";
 import { DailyReviewPanel } from "../components/daily-review/DailyReviewPanel";
+import { PortfolioPanel } from "../components/daily-review/PortfolioPanel";
 
 function formatPct(value) {
   if (value == null || Number.isNaN(Number(value))) return "—";
@@ -354,7 +355,10 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
         aside={headerAside}
       />
 
-      <DailyReviewPanel stocks={allStocks} />
+      <DailyReviewPanel
+        portfolioSlot={<PortfolioPanel stocks={allStocks} />}
+        stocks={allStocks}
+      />
 
       <div className="watchlist-section-title" role="heading" aria-level={2}>
         个股清单

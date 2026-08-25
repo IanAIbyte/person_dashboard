@@ -334,3 +334,234 @@
   color: var(--danger);
   opacity: 1;
 }
+
+/* ---- 持仓分析 ---- */
+
+.review-portfolio {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  padding: 12px 14px;
+}
+
+.review-portfolio__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.review-portfolio__head h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.review-position-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.review-position-form input,
+.review-position-close input {
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  font-size: 11.5px;
+}
+
+.review-position-form__code { width: 76px; font-family: var(--font-mono); }
+.review-position-form__name { width: 108px; }
+.review-position-form__shares { width: 84px; }
+.review-position-form__cost { width: 84px; }
+.review-position-form__note { flex: 1 1 160px; }
+.review-position-form__date { width: 138px; color: var(--ink-soft); }
+
+.review-position-form__submit,
+.review-position-form__cancel {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.review-position-form__submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.review-position-form__error {
+  align-self: center;
+  font-size: 11px;
+  color: var(--danger);
+}
+
+.review-portfolio__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.review-portfolio__table th {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+  text-align: right;
+}
+
+.review-portfolio__table th:first-child { text-align: left; }
+
+.review-portfolio__row {
+  cursor: pointer;
+  border-bottom: 1px dashed var(--line);
+}
+
+.review-portfolio__row:hover { background: var(--surface); }
+.review-portfolio__row--open { background: var(--surface); }
+
+.review-portfolio__row td,
+.review-portfolio__table--history td {
+  padding: 7px 6px;
+  text-align: right;
+  vertical-align: middle;
+}
+
+.review-portfolio__name { text-align: left; }
+.review-portfolio__name strong { font-size: 12.5px; }
+.review-portfolio__code {
+  margin-left: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+
+.review-portfolio__num {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.review-portfolio__num em {
+  display: block;
+  font-style: normal;
+  font-size: 10px;
+  opacity: 0.75;
+}
+
+.review-portfolio__weight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  max-width: 180px;
+}
+
+.review-portfolio__weight span {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0.55;
+}
+
+.review-portfolio__weight em {
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--ink-soft);
+}
+
+.review-portfolio__ops {
+  white-space: nowrap;
+}
+
+.review-portfolio__ops button {
+  margin-left: 4px;
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--ink-soft);
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.review-portfolio__ops button:hover {
+  border-color: var(--accent-soft);
+  color: var(--accent);
+}
+
+.review-portfolio__subrow td {
+  padding: 6px 10px 10px;
+  background: var(--surface);
+}
+
+.review-position-close {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+
+.review-position-close input { width: 92px; }
+
+.review-position-close button {
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--ink-soft);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.review-portfolio__totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+
+.review-portfolio__totals strong {
+  font-family: var(--font-mono);
+  color: inherit;
+}
+
+.review-portfolio__history {
+  margin-top: 12px;
+}
+
+.review-portfolio__history summary {
+  cursor: pointer;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+
+.review-portfolio__table--history {
+  margin-top: 8px;
+}
+

@@ -38,6 +38,7 @@ export function createDailyReviewService({
   readAlerts,
   eventsRepo,
   reviewStore,
+  portfolioRepo = null,
   now = () => Date.now(),
 } = {}) {
   if (!marketService) throw new TypeError("daily review requires a market service.");
@@ -145,12 +146,96 @@ export function createDailyReviewService({
     return { date: resolvedDate, items: items.slice(0, MAX_TIMELINE_ITEMS) };
   }
 
+  // 持仓分析：活跃仓结合行情计算市值/浮盈亏/当日盈亏/权重，已清仓单列历史。
+  async function getPortfolio() {
+    const positions = await portfolioRepo.list();
+    const active = positions.filter((item) => !item.closedAt);
+    const closed = positions.filter((item) => item.closedAt);
+    const quotes = active.length
+      ? await marketService.getQuotes(active.map((item) => item.code))
+      : new Map();
+
+    const rows = active.map((item) => {
+      const quote = quotes.get(item.code) ?? null;
+      const price = quote?.price ?? null;
+      const marketValue = price != null ? Math.round(item.shares * price * 100) / 100 : null;
+      const pnl = price != null
+        ? Math.round((price - item.costPrice) * item.shares * 100) / 100
+        : null;
+      const pnlPct = price != null && item.costPrice > 0
+        ? Math.round(((price - item.costPrice) / item.costPrice) * 10000) / 100
+        : null;
+      const dayPnl = marketValue != null && quote?.changePct != null
+        ? Math.round(marketValue * quote.changePct) / 100
+        : null;
+      return {
+        ...item,
+        quote: {
+          price,
+          prevClose: quote?.prevClose ?? null,
+          changePct: quote?.changePct ?? null,
+        },
+        marketValue,
+        pnl,
+        pnlPct,
+        dayPnl,
+        weight: null, // 汇总后回填
+      };
+    });
+
+    const totalValue = rows.reduce((sum, row) => sum + (row.marketValue ?? 0), 0);
+    for (const row of rows) {
+      row.weight = totalValue > 0 && row.marketValue != null
+        ? Math.round((row.marketValue / totalValue) * 1000) / 10
+        : null;
+    }
+    const totalCost = rows.reduce((sum, row) => sum + row.costPrice * row.shares, 0);
+    const totals = {
+      positions: rows.length,
+      marketValue: Math.round(totalValue * 100) / 100,
+      cost: Math.round(totalCost * 100) / 100,
+      pnl: Math.round((totalValue - totalCost) * 100) / 100,
+      pnlPct: totalCost > 0 ? Math.round(((totalValue - totalCost) / totalCost) * 10000) / 100 : null,
+      dayPnl: Math.round(rows.reduce((sum, row) => sum + (row.dayPnl ?? 0), 0) * 100) / 100,
+      maxWeight: rows.reduce((max, row) => Math.max(max, row.weight ?? 0), 0),
+    };
+
+    const closedRows = closed.map((item) => ({
+      ...item,
+      finalPnl: item.closedPrice != null
+        ? Math.round((item.closedPrice - item.costPrice) * item.shares * 100) / 100
+        : null,
+      finalPnlPct: item.closedPrice != null && item.costPrice > 0
+        ? Math.round(((item.closedPrice - item.costPrice) / item.costPrice) * 10000) / 100
+        : null,
+    }));
+
+    return { generatedAt: new Date(now()).toISOString(), positions: rows, totals, closed: closedRows };
+  }
+
+  // 个股当日分时（持仓行展开用，任何 6 位个股代码均可）。
+  async function getStockIntraday(code, date = null) {
+    if (typeof code !== "string" || !/^\d{6}$/.test(code)) {
+      const error = new Error("个股代码必须是 6 位数字。");
+      error.code = "INVALID_STOCK_CODE";
+      throw error;
+    }
+    const resolvedDate = normalizeDateParam(date, now());
+    const [quotes, intraday] = await Promise.all([
+      marketService.getQuotes([code]),
+      marketService.getMinuteKlines(code, { ktype: "m5", date: resolvedDate }),
+    ]);
+    const prevClose = positiveOrNull(quotes.get(code)?.prevClose);
+    return { code, date: resolvedDate, intraday, prevCloseReference: prevClose };
+  }
+
   // 供 LLM generate 端点取上下文。
   async function collectReviewContext(date = null) {
     const resolvedDate = normalizeDateParam(date, now());
-    const [indicesResult, timeline] = await Promise.all([
+    const [indicesResult, timeline, portfolio] = await Promise.all([
       getIndices(resolvedDate),
       getTimeline(resolvedDate),
+      portfolioRepo ? getPortfolio() : Promise.resolve(null),
     ]);
     const indices = indicesResult.indices.map((index) => ({
       name: index.name,
@@ -164,8 +249,24 @@ export function createDailyReviewService({
         title: `${item.title} ${item.name ?? ""}`.trim(),
         changePct: item.changePct ?? null,
       }));
-    return { date: resolvedDate, indices, events };
+    const positions = portfolio
+      ? portfolio.positions.map((row) => ({
+          name: row.name ?? row.code,
+          weight: row.weight,
+          pnlPct: row.pnlPct,
+          dayPnlPct: row.quote?.changePct ?? null,
+          note: row.note,
+        }))
+      : [];
+    return { date: resolvedDate, indices, events, positions };
   }
 
-  return Object.freeze({ getIndices, getIndexDaily, getTimeline, collectReviewContext });
+  return Object.freeze({
+    getIndices,
+    getIndexDaily,
+    getTimeline,
+    collectReviewContext,
+    getPortfolio,
+    getStockIntraday,
+  });
 }
