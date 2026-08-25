@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "indices": [
+    { "symbol": "sh000001", "code": "000001", "name": "上证指数" },
+    { "symbol": "sz399001", "code": "399001", "name": "深证成指" },
+    { "symbol": "sz399006", "code": "399006", "name": "创业板指" },
+    { "symbol": "sh000688", "code": "000688", "name": "科创50" }
+  ]
+}

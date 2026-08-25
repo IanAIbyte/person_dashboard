@@ -15,6 +15,8 @@ import { createStockFinancialsService } from "./stock-financials.mjs";
 import { createStockPoolRepository } from "./stock-pool.mjs";
 import { createStockCodesRepository } from "./stock-codes.mjs";
 import { pushServerChan } from "./serverchan.mjs";
+import { detectAlerts } from "./watchdog-core.mjs";
+import { loadDailyReviewConfig } from "./daily-review-config.mjs";
 
 const workbenchRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const vaultRoot = path.resolve(workbenchRoot, "..", "个人知识库");
@@ -33,6 +35,8 @@ const DEFAULT_CONFIG = {
   cooldownMinutes: 15,    // 同股同向冷却（分钟）
   pushEnabled: true,      // Server酱推送开关
   dailyPushLimit: 5,      // Server酱免费额度（条/天）
+  indexEnabled: true,     // 指数异动监控开关（清单见 config/daily-review.*.json）
+  indexThresholdPct: 1,   // 指数急拉急跌阈值（%）——指数波动小于个股，默认 1
 };
 
 // ---- .env 解析（仅 SERVERCHAN_SENDKEY）----
@@ -130,11 +134,12 @@ async function main() {
     }
     const typeLabel = alert.type === "surge" ? "急拉" : alert.type === "plunge" ? "急跌"
       : alert.type === "limitUp" ? "触及涨停" : alert.type === "limitDown" ? "触及跌停" : "异动";
+    const scopedLabel = alert.scope === "index" ? `指数${typeLabel}` : typeLabel;
     const direction = alert.changePct > 0 ? "+" : "";
-    const title = `【${typeLabel}】${alert.name} ${direction}${alert.changePct}%`;
+    const title = `【${scopedLabel}】${alert.name} ${direction}${alert.changePct}%`;
     const desp = [
       `**${alert.name}（${alert.code}）**`,
-      `- 类型：${typeLabel}`,
+      `- 类型：${scopedLabel}`,
       `- 幅度：${direction}${alert.changePct}%（${config.windowMinutes} 分钟窗口）`,
       `- 现价：${alert.price}`,
       `- 时间：${new Date(alert.ts).toLocaleString("zh-CN")}`,
@@ -188,48 +193,40 @@ async function main() {
     const overrides = await codesRepo.overrides();
     const stocks = await poolRepo.pool(overrides);
     const tradable = stocks.filter((s) => s.code);
-    if (tradable.length === 0) return;
-    const quotes = await market.getQuotes(tradable.map((s) => s.code));
-    const byCode = new Map(tradable.map((s) => [s.code, s]));
-    const windowMs = config.windowMinutes * 60_000;
-    const cooldownMs = config.cooldownMinutes * 60_000;
-    const now = Date.now();
+    const bySymbolMeta = new Map();
+    const codes = [];
+    if (tradable.length > 0) {
+      for (const stock of tradable) {
+        bySymbolMeta.set(stock.code, { name: stock.name, scope: "stock" });
+        codes.push(stock.code);
+      }
+    }
 
-    for (const [code, quote] of quotes) {
-      if (quote.price == null) continue;
-      // 滚动窗口采样
-      const deque = samples.get(code) ?? [];
-      deque.push({ ts: now, price: quote.price });
-      while (deque.length && now - deque[0].ts > windowMs) deque.shift();
-      samples.set(code, deque);
+    // 指数监控：清单来自 config/daily-review.*.json（与复盘页面共享）。
+    if (config.indexEnabled) {
+      try {
+        const reviewConfig = await loadDailyReviewConfig(workbenchRoot);
+        for (const index of reviewConfig.indices) {
+          bySymbolMeta.set(index.symbol, { name: index.name, scope: "index" });
+          codes.push(index.symbol);
+        }
+      } catch (error) {
+        log(`指数清单读取失败（跳过指数监控）: ${error?.message || error}`);
+      }
+    }
+    if (codes.length === 0) return;
 
-      const base = deque[0]?.price;
-      if (base == null || base === quote.price) continue;
-      const changePct = ((quote.price - base) / base) * 100;
-      const stock = byCode.get(code);
-
-      let type = null;
-      if (quote.limitUp != null && quote.price >= quote.limitUp) type = "limitUp";
-      else if (quote.limitDown != null && quote.price <= quote.limitDown) type = "limitDown";
-      else if (changePct >= config.thresholdPct) type = "surge";
-      else if (changePct <= -config.thresholdPct) type = "plunge";
-      if (!type) continue;
-
-      // 冷却：同股同向
-      const coolKey = `${code}:${type}`;
-      const last = cooldowns.get(coolKey);
-      if (last && now - last < cooldownMs) continue;
-      cooldowns.set(coolKey, now);
-
-      await recordAlert({
-        ts: new Date(now).toISOString(),
-        code,
-        name: stock?.name ?? quote.name ?? code,
-        type,
-        changePct: Number(changePct.toFixed(2)),
-        price: quote.price,
-        windowMinutes: config.windowMinutes,
-      }, config);
+    const quotes = await market.getQuotes(codes);
+    const alerts = detectAlerts({
+      quotes,
+      bySymbolMeta,
+      samples,
+      cooldowns,
+      config,
+      now: Date.now(),
+    });
+    for (const alert of alerts) {
+      await recordAlert(alert, config);
     }
   }
 

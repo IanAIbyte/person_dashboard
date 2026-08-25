@@ -803,6 +803,8 @@ const WATCHDOG_DEFAULT_CONFIG = {
   cooldownMinutes: 15,
   pushEnabled: true,
   dailyPushLimit: 5,
+  indexEnabled: true,
+  indexThresholdPct: 1,
 };
 
 function watchdogStatePath(kind) {
@@ -1884,7 +1886,7 @@ export function workbenchApiPlugin({
             const body = await readJson(req, 8 * 1024);
             assertAllowedObjectKeys(
               body,
-              new Set(["enabled", "thresholdPct", "windowMinutes", "cooldownMinutes", "pushEnabled", "dailyPushLimit"]),
+              new Set(["enabled", "thresholdPct", "windowMinutes", "cooldownMinutes", "pushEnabled", "dailyPushLimit", "indexEnabled", "indexThresholdPct"]),
               "INVALID_WATCHDOG_CONFIG",
             );
             const current = await readWatchdogState("config", {});

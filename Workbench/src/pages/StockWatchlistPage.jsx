@@ -1304,6 +1304,16 @@ function WatchdogPanel() {
           <span>微信推送</span>
         </label>
         <label className="watchdog-panel__field">
+          <input type="checkbox" checked={config.indexEnabled !== false} disabled={saving}
+            onChange={(e) => patch({ indexEnabled: e.target.checked })} />
+          <span>指数盯盘</span>
+        </label>
+        <label className="watchdog-panel__field">
+          <span>指数阈值 ±%</span>
+          <input type="number" step="0.25" min="0.25" max="10" defaultValue={config.indexThresholdPct ?? 1} disabled={saving}
+            onBlur={(e) => { const v = Number(e.target.value); if (v > 0 && v !== (config.indexThresholdPct ?? 1)) patch({ indexThresholdPct: v }); }} />
+        </label>
+        <label className="watchdog-panel__field">
           <span>急拉急跌阈值 ±%</span>
           <input type="number" step="0.5" min="0.5" max="20" defaultValue={config.thresholdPct} disabled={saving}
             onBlur={(e) => { const v = Number(e.target.value); if (v > 0 && v !== config.thresholdPct) patch({ thresholdPct: v }); }} />
