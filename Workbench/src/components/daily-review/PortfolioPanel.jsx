@@ -281,7 +281,7 @@ function PositionRow({ position, maxWeight, onEdit, onReload }) {
             <em>{position.weight != null ? `${position.weight}%` : "—"}</em>
           </div>
         </td>
-        <td className="review-portfolio__num">
+        <td className="review-portfolio__num" onClick={(e) => e.stopPropagation()}>
           <EditableCell
             type="number"
             value={position.shares}
@@ -289,7 +289,7 @@ function PositionRow({ position, maxWeight, onEdit, onReload }) {
             validate={(v) => Number.isInteger(v) && v > 0}
           />
         </td>
-        <td className="review-portfolio__num">
+        <td className="review-portfolio__num" onClick={(e) => e.stopPropagation()}>
           <EditableCell
             type="number"
             value={position.costPrice}
