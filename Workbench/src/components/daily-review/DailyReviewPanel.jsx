@@ -336,6 +336,9 @@ function SessionSummaryCard({ title, session, entry, stocks, date, onSaved }) {
       </div>
       {review ? (
         <div className="review-summary__body">
+          <span className="review-summary__meta">
+            生成于 {entry.generatedAt ? new Date(entry.generatedAt).toLocaleString("zh-CN") : "—"}
+          </span>
           {review.markdown ? (
             <div className="review-summary__markdown">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{review.markdown}</ReactMarkdown>
@@ -343,9 +346,6 @@ function SessionSummaryCard({ title, session, entry, stocks, date, onSaved }) {
           ) : (
             <p className="review-summary__overview">{review.overview}</p>
           )}
-          <span className="review-summary__meta">
-            生成于 {entry.generatedAt ? new Date(entry.generatedAt).toLocaleString("zh-CN") : "—"}
-          </span>
         </div>
       ) : (
         <p className="review-summary__empty">
