@@ -1154,6 +1154,7 @@ export function workbenchApiPlugin({
     autoReviewRunning = true;
     try {
       if (await dailyReviewStore.get(date, "close")) {
+        console.log(`[workbench] 收盘总结已存在（手动生成过），跳过自动生成：${date}`);
         autoReviewDoneDate = date;
         return;
       }
@@ -1164,7 +1165,8 @@ export function workbenchApiPlugin({
       const context = await dailyReview.collectReviewContext(date, stocks);
       const { prompt: promptTemplate } = await coachPrompt.get();
       const started = await stockAnalysis.startCoachReview(context, { promptTemplate });
-      const deadline = Date.now() + 12 * 60_000;
+      // 轮询上限须覆盖 LLM 最坏情况：单次 10 分钟 + 重试 1 次 = 20 分钟。
+      const deadline = Date.now() + 22 * 60_000;
       for (;;) {
         await new Promise((resolve) => setTimeout(resolve, 10_000));
         const task = stockAnalysis.get(started.id);
