@@ -43,6 +43,9 @@ import "./daily-review.css";
 const TONE_LABELS = { info: "记录", up: "偏多", down: "偏空", note: "备注" };
 const SOURCE_LABELS = { watchdog: "异动", manual: "手动", ai: "AI" };
 
+// 排版规范：LLM 产出与存量内容中的长破折号统一降级为普通连字符。
+const noDash = (text) => (typeof text === "string" ? text.replace(/[—–]/g, "-") : text);
+
 function formatTime(ts) {
   if (!ts) return "--:--";
   return new Date(ts).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
@@ -142,15 +145,15 @@ function IndexCard({ index }) {
       >
         <span className="review-index__name">{index.name}</span>
         <span className="review-index__price">
-          {quote?.price ?? "—"}
+          {quote?.price ?? "-"}
         </span>
         <span className={`review-index__pct ${pctClass(changePct)}`}>
-          {changePct == null ? "—" : `${changePct > 0 ? "+" : ""}${changePct}%`}
+          {changePct == null ? "-" : `${changePct > 0 ? "+" : ""}${changePct}%`}
         </span>
       </button>
       <div className="review-index__meta">
-        <span>振幅 {quote?.amplitudePct ?? "—"}%</span>
-        <span>高 {quote?.high ?? "—"} / 低 {quote?.low ?? "—"}</span>
+        <span>振幅 {quote?.amplitudePct ?? "-"}%</span>
+        <span>高 {quote?.high ?? "-"} / 低 {quote?.low ?? "-"}</span>
       </div>
       <IntradayChart intraday={index.intraday} prevClose={index.prevCloseReference} />
       {expanded ? (
@@ -289,7 +292,7 @@ const WATCH_ORDER = { 接近买点: 0, 建议移出: 1, 继续观察: 2 };
 function StatTile({ label, value, tone = "" }) {
   return (
     <div className={`coach-tile${tone ? ` coach-tile--${tone}` : ""}`}>
-      <strong>{value ?? "—"}</strong>
+      <strong>{value ?? "-"}</strong>
       <span>{label}</span>
     </div>
   );
@@ -325,8 +328,8 @@ function MarketSection({ market }) {
           ))}
         </div>
       ) : null}
-      {market?.sentimentNext ? <p className="coach-note coach-note--judge">{market.sentimentNext}</p> : null}
-      {market?.narrative ? <p className="coach-note">{market.narrative}</p> : null}
+      {market?.sentimentNext ? <p className="coach-note coach-note--judge">{noDash(market.sentimentNext)}</p> : null}
+      {market?.narrative ? <p className="coach-note">{noDash(market.narrative)}</p> : null}
     </section>
   );
 }
@@ -334,7 +337,7 @@ function MarketSection({ market }) {
 function HoldingCard({ holding }) {
   const action = ACTION_TONE[holding?.action] ?? "flat";
   const logic = LOGIC_TONE[holding?.logic] ?? "flat";
-  const num = (value) => (typeof value === "number" ? value.toFixed(2) : "—");
+  const num = (value) => (typeof value === "number" ? value.toFixed(2) : "-");
   return (
     <article className="coach-holding">
       <header className="coach-holding__head">
@@ -348,10 +351,10 @@ function HoldingCard({ holding }) {
         <span>压力 <strong>{num(holding?.pressure)}</strong><em>{holding?.pressureBasis}</em></span>
         <span>止损 <strong>{num(holding?.stop)}</strong></span>
       </div>
-      {holding?.note ? <p className="coach-note">{holding.note}</p> : null}
+      {holding?.note ? <p className="coach-note">{noDash(holding.note)}</p> : null}
       <div className="coach-holding__conds">
-        {holding?.trigger ? <p><b>触发</b>{holding.trigger}</p> : null}
-        {holding?.invalid ? <p><b>失效</b>{holding.invalid}</p> : null}
+        {holding?.trigger ? <p><b>触发</b>{noDash(holding.trigger)}</p> : null}
+        {holding?.invalid ? <p><b>失效</b>{noDash(holding.invalid)}</p> : null}
       </div>
     </article>
   );
@@ -402,7 +405,7 @@ function CoachReport({ structured }) {
   const watch = Array.isArray(structured?.watch) ? structured.watch : [];
   return (
     <div className="coach-report">
-      {structured?.core ? <p className="coach-core">{structured.core}</p> : null}
+      {structured?.core ? <p className="coach-core">{noDash(structured.core)}</p> : null}
       <MarketSection market={structured?.market} />
       <section className="coach-section" aria-label="持仓诊断">
         <h4>二、持仓诊断</h4>
@@ -428,8 +431,8 @@ function CoachReport({ structured }) {
                         {item.conclusion}
                       </span>
                     ) : <span />}
-                    <span className="coach-watch__distance" title={item.distance}>{item.distance || "—"}</span>
-                    <span className="coach-watch__note" title={item.note}>{item.note || "—"}</span>
+                    <span className="coach-watch__distance" title={item.distance}>{noDash(item.distance) || "-"}</span>
+                    <span className="coach-watch__note" title={item.note}>{noDash(item.note) || "-"}</span>
                   </li>
                 ))}
             </ul>
@@ -501,13 +504,13 @@ function SessionSummaryCard({ title, session, entry, stocks, date, onSaved }) {
       {review ? (
         <div className="review-summary__body">
           <span className="review-summary__meta">
-            生成于 {entry.generatedAt ? new Date(entry.generatedAt).toLocaleString("zh-CN") : "—"}
+            生成于 {entry.generatedAt ? new Date(entry.generatedAt).toLocaleString("zh-CN") : "-"}
           </span>
           {review.structured ? (
             <CoachReport structured={review.structured} />
           ) : review.markdown ? (
             <div className="review-summary__markdown">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{review.markdown}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{noDash(review.markdown)}</ReactMarkdown>
             </div>
           ) : (
             <p className="review-summary__overview">{review.overview}</p>

@@ -62,7 +62,8 @@ export const DEFAULT_COACH_PROMPT = `你是 {{date}} {{session}} 的复盘教练
 1. 支撑/压力必须基于数据段给出的 60 日高低、均线、近 5 日收盘给具体价位（2 位小数）并注明依据；建议必须同时有 trigger 与 invalid；禁用「必涨」类表述。
 2. 数据缺口在文本中写 [待补充]，严禁编造价格、成交量、新闻、公告。
 3. 不迎合既有观点：持仓逻辑已破坏而用户未察觉时，在 note 中直接点明。
-4. holdings/watch 逐只输出勿遗漏；prob 三者之和约为 100。`;
+4. holdings/watch 逐只输出勿遗漏；prob 三者之和约为 100。
+5. 全文禁用长破折号（em dash）与 en dash 两种字符（排版规范），需要停顿或分隔时用中文逗号、冒号或普通连字符「-」。`;
 
 export class CoachPromptError extends Error {
   constructor(code, message) {

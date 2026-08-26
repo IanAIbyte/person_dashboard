@@ -11,7 +11,7 @@
   --surface-sunken: #f4f4f5;
   --ink: #0a0a0a;
   --ink-soft: #52525b;
-  --ink-faint: #a1a1aa;
+  --ink-faint: #71717a; /* zinc-500：对 --paper 对比度 ≈4.8:1，满足 AA（10px mono 小标签亦安全） */
   --line: #ececee;
   --line-strong: #dcdce0;
 
@@ -29,6 +29,8 @@
   --font-body: "Noto Sans SC", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
 
+  /* 圆角体系（全站唯一规则）：输入/小控件 8 · 卡片/面板 14 · 大容器 22 · 徽章/胶囊 999。
+     表格单元格与图表 0。新增组件按此映射取值，不得自造中间值。 */
   --r-sm: 8px;
   --r-md: 14px;
   --r-lg: 22px;
