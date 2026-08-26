@@ -446,24 +446,14 @@ function ReviewSummaryBlock({ stocks, date, onSaved }) {
 
   return (
     <div className="review-summary-block">
-      <div className="review-summary-grid">
-        <SessionSummaryCard
-          date={date}
-          entry={summaries.intraday}
-          onSaved={saved}
-          session="intraday"
-          stocks={stocks}
-          title="AI 盘中总结"
-        />
-        <SessionSummaryCard
-          date={date}
-          entry={summaries.close}
-          onSaved={saved}
-          session="close"
-          stocks={stocks}
-          title="AI 收盘复盘"
-        />
-      </div>
+      <SessionSummaryCard
+        date={date}
+        entry={summaries.close}
+        onSaved={saved}
+        session="close"
+        stocks={stocks}
+        title="AI 每日总结"
+      />
       <PromptEditor />
     </div>
   );
