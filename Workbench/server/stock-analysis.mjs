@@ -36,6 +36,25 @@ function parseJson(content, fallback) {
   }
 }
 
+// 结构化复盘宽容提取：LLM 可能带前言/围栏。依次尝试——原文 → 围栏内 →
+// 首个 { 到末个 } 的切片。都不是合法 JSON 才放弃（走 markdown 降级）。
+export function extractJsonObject(content) {
+  const text = String(content ?? "");
+  const attempts = [
+    text,
+    text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1] ?? "",
+    text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1),
+  ];
+  for (const attempt of attempts) {
+    if (!attempt.trim().startsWith("{")) continue;
+    try {
+      const parsed = JSON.parse(attempt);
+      if (parsed && typeof parsed === "object") return parsed;
+    } catch { /* 试下一种 */ }
+  }
+  return null;
+}
+
 function fmtPct(value) {
   if (value == null || !Number.isFinite(Number(value))) return "?%";
   const n = Number(value);
@@ -406,8 +425,8 @@ verifications 仅汇总清单中「监控」字段的验证节点，没有则输
         // 四段式长文 + 27 只关注股逐只跟踪，生成时长波动大（实测 190-400s+）。
         timeoutMs: 600_000,
       });
-      // 首选 JSON 信封（前端结构化渲染）；解析失败降级为 markdown 全文。
-      const structured = parseJson(content, null);
+      // 首选 JSON 信封（前端结构化渲染）；宽容提取，失败降级为 markdown 全文。
+      const structured = extractJsonObject(content);
       if (structured && typeof structured === "object" && typeof structured.core === "string") {
         return {
           generatedAt: new Date().toISOString(),

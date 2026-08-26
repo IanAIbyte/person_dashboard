@@ -243,6 +243,27 @@ test("startCoachReview falls back to markdown when JSON invalid", async () => {
   assert.equal(task.result.markdown, "这不是 JSON,是一段普通复盘文字。");
 });
 
+test("extractJsonObject tolerates preamble and fences", async () => {
+  const { extractJsonObject } = await import("../server/stock-analysis.mjs");
+  const payload = { core: "x" };
+  // 带 disclaimer 前言 + JSON
+  assert.deepEqual(
+    extractJsonObject(`*以下为推演,非投资建议*\n\n${JSON.stringify(payload)}`),
+    payload,
+  );
+  // 围栏包裹
+  assert.deepEqual(extractJsonObject("```json\n" + JSON.stringify(payload) + "\n```"), payload);
+  // 纯文本无 JSON → null
+  assert.equal(extractJsonObject("完全是文字,没有对象。"), null);
+  // 前言 + 围栏混排
+  const service2 = createStockAnalysisService({
+    llmClient: mockLlm(`免责声明。\n\`\`\`json\n${JSON.stringify({ core: "ok" })}\n\`\`\``),
+  });
+  const started2 = await service2.startCoachReview({ date: "2026-08-26", indices: [], positions: [], watch: [], events: [] });
+  const task2 = await waitForTask(service2, started2.id);
+  assert.equal(task2.result.structured?.core, "ok");
+});
+
 test("startCoachReview honors custom prompt template and intraday session", async () => {
   let capturedPrompt = "";
   const service = createStockAnalysisService({
