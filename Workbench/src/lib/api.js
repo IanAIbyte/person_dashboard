@@ -768,6 +768,12 @@ export function loadDailyReviewSentiment() {
   );
 }
 
+// 提示词库检索：服务端聚合双源并缓存，这里每次直连（含用户输入，不宜长缓存）。
+export function searchPrompts(q, lang) {
+  const params = new URLSearchParams({ q, lang });
+  return request(`/api/prompts?${params}`);
+}
+
 export async function updateReviewSchedule(patch) {
   const result = await request("/api/daily-review/schedule", {
     method: "PUT",

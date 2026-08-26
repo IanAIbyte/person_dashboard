@@ -5,6 +5,7 @@ import {
   IconBooks,
   IconBriefcase,
   IconBulb,
+  IconSparkles,
   IconChartCandle,
   IconChevronLeft,
   IconChevronRight,
@@ -31,6 +32,7 @@ const primaryNavigation = [
     ? [{ to: "/stocks", label: "每日复盘", icon: IconChartCandle }]
     : []),
   { to: "/topics", label: "灵感库", icon: IconBulb },
+  { to: "/prompts", label: "提示词", icon: IconSparkles },
 ];
 
 // 导航顺序持久化：存路由数组，恢复时按序重排；未记录的新增项保持默认顺序追加。

@@ -63,6 +63,7 @@ import { createDailyReviewService } from "./daily-review.mjs";
 import { loadDailyReviewConfig } from "./daily-review-config.mjs";
 import { createPortfolioRepository, PORTFOLIO_PATH } from "./portfolio.mjs";
 import { createSentimentDataService } from "./sentiment-data.mjs";
+import { createPromptsLibrary } from "./prompts-library.mjs";
 import { createCoachPromptRepository, COACH_PROMPT_PATH } from "./coach-prompt.mjs";
 import { createReviewScheduleRepository, REVIEW_SCHEDULE_PATH } from "./review-schedule.mjs";
 import {
@@ -910,6 +911,7 @@ export function workbenchApiPlugin({
   const dailyReviewStore = createDailyReviewStore({ vaultRoot });
   const portfolioRepo = createPortfolioRepository({ vaultRoot });
   const sentimentService = createSentimentDataService();
+  const promptsLibrary = createPromptsLibrary();
   const coachPrompt = createCoachPromptRepository({ vaultRoot });
   const reviewSchedule = createReviewScheduleRepository({ vaultRoot });
   const dailyReview = createDailyReviewService({
@@ -2189,6 +2191,17 @@ export function workbenchApiPlugin({
               dailyReviewStore.get(date, "close"),
             ]);
             return json(res, 200, { intraday, close });
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/prompts") {
+            const q = url.searchParams.get("q") ?? "";
+            const lang = url.searchParams.get("lang") ?? "all";
+            const limit = Math.min(Number(url.searchParams.get("limit")) || 30, 50);
+            try {
+              return json(res, 200, await promptsLibrary.search({ q, lang, limit }));
+            } catch (error) {
+              return json(res, 502, { error: { code: "PROMPTS_UNAVAILABLE", message: error?.message ?? "提示词库暂不可用" } });
+            }
           }
 
           if (req.method === "GET" && url.pathname === "/api/daily-review/sentiment") {

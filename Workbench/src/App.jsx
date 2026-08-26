@@ -11,6 +11,7 @@ import { SystemPage } from "./pages/SystemPage";
 import { TopicsPage } from "./pages/TopicsPage";
 import { CareerPage } from "./pages/CareerPage";
 import { StockWatchlistPage } from "./pages/StockWatchlistPage";
+import { PromptsLibraryPage } from "./pages/PromptsLibraryPage";
 import { useVaultSync } from "./hooks/useVaultSync";
 
 const localWorkbench = import.meta.env.VITE_WORKBENCH_HOSTED !== "true";
@@ -101,6 +102,7 @@ export function App() {
             path="/topics"
             element={<TopicsPage onOpenDocument={openDocument} />}
           />
+          <Route path="/prompts" element={<PromptsLibraryPage />} />
           <Route path="/system" element={<SystemPage />} />
           <Route path="*" element={<Navigate replace to="/" />} />
         </Routes>
