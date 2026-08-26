@@ -189,8 +189,14 @@ test("startResearch falls back to a minimal structure when the LLM output is not
 });
 
 test("startCoachReview renders four-part markdown from context data", async () => {
+  let capturedPrompt = "";
   const service = createStockAnalysisService({
-    llmClient: mockLlm("## 一、大盘与情绪面\n沪指收涨。\n**今日核心**：分化。"),
+    llmClient: {
+      chatCompletion: async ({ messages }) => {
+        capturedPrompt = messages[1].content;
+        return "## 一、大盘与情绪面\n沪指收涨。\n**今日核心**：分化。";
+      },
+    },
   });
   const started = await service.startCoachReview({
     date: "2026-08-25",
@@ -211,6 +217,48 @@ test("startCoachReview renders four-part markdown from context data", async () =
   assert.equal(task.result.markdown, "## 一、大盘与情绪面\n沪指收涨。\n**今日核心**：分化。");
   assert.ok(task.result.overview.length > 0);
   assert.ok(task.result.overview.length <= 120);
+  // 默认模板 + 数据段 + session 注入。
+  assert.ok(capturedPrompt.includes("四段式复盘"));
+  assert.ok(capturedPrompt.includes("# 今日真实数据"));
+  assert.ok(capturedPrompt.includes("收盘后复盘"));
+  assert.ok(capturedPrompt.includes("上涨 [待补充] 家"));
+});
+
+test("startCoachReview honors custom prompt template and intraday session", async () => {
+  let capturedPrompt = "";
+  const service = createStockAnalysisService({
+    llmClient: {
+      chatCompletion: async ({ messages }) => {
+        capturedPrompt = messages[1].content;
+        return "盘中快照完成。";
+      },
+    },
+  });
+  const started = await service.startCoachReview(
+    {
+      date: "2026-08-26",
+      session: { key: "intraday", phase: "lunch", label: "午间休市 · 盘中", time: "12:00", isTrading: true },
+      indices: [],
+      sentiment: { upCount: 3000, downCount: 2000, limitUp: 60, maxBoards: 5, limitDown: null, blastRate: null, promotionRate: 55.5, topSectors: [{ name: "半导体", changePct: 3.2 }], bottomSectors: null, bj50: { close: 1400.5, changePct: -1.2 } },
+      positions: [],
+      watch: [],
+      events: [],
+    },
+    { promptTemplate: "自定义模板 {{date}} {{session}}——只输出盘中要点。" },
+  );
+  const task = await waitForTask(service, started.id);
+
+  assert.equal(task.status, "completed");
+  assert.equal(task.result.session, "intraday");
+  assert.ok(capturedPrompt.startsWith("自定义模板 2026-08-26 午间休市 · 盘中"));
+  assert.ok(capturedPrompt.includes("盘中复盘"));
+  assert.ok(capturedPrompt.includes("上涨 3000 家 / 下跌 2000 家"));
+  assert.ok(capturedPrompt.includes("涨停 60 家"));
+  assert.ok(capturedPrompt.includes("最高连板 5 板"));
+  assert.ok(capturedPrompt.includes("昨日涨停晋级率 55.5%"));
+  assert.ok(capturedPrompt.includes("北证50：1400.5（-1.20%）"));
+  assert.ok(capturedPrompt.includes("领涨板块 半导体 +3.20%"));
+  assert.ok(capturedPrompt.includes("跌停 [待补充]"));
 });
 
 test("startReview keeps monitor context and parses verification nodes", async () => {

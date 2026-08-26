@@ -728,8 +728,30 @@ export function loadDailyReviewTimeline(date = null) {
 export function loadDailyReviewSummary(date) {
   return withFallback(
     () => cachedGet(`/api/daily-review/summary?date=${encodeURIComponent(date)}`, 60_000),
-    () => ({ entry: null }),
+    () => ({ intraday: null, close: null }),
   );
+}
+
+export function loadCoachPrompt() {
+  return withFallback(
+    () => cachedGet("/api/daily-review/prompt", 10_000),
+    () => ({ prompt: null, customized: false, variables: [] }),
+  );
+}
+
+export async function saveCoachPrompt(prompt) {
+  const result = await request("/api/daily-review/prompt", {
+    method: "PUT",
+    body: JSON.stringify({ prompt }),
+  });
+  invalidateCache("/api/daily-review/prompt");
+  return result;
+}
+
+export async function resetCoachPrompt() {
+  const result = await request("/api/daily-review/prompt", { method: "DELETE" });
+  invalidateCache("/api/daily-review/prompt");
+  return result;
 }
 
 export async function addReviewEvent(payload) {
@@ -758,10 +780,10 @@ export async function saveDailyReviewSummary(date, payload) {
   return entry;
 }
 
-export function startDailyReviewGenerate(stocks, date = null) {
+export function startDailyReviewGenerate(stocks, session = "close", date = null) {
   return request("/api/daily-review/generate", {
     method: "POST",
-    body: JSON.stringify({ stocks, ...(date ? { date } : {}) }),
+    body: JSON.stringify({ stocks, session, ...(date ? { date } : {}) }),
   });
 }
 

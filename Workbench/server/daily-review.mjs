@@ -3,6 +3,7 @@
 // 服务端各端点只做薄封装。
 
 import { computeMA } from "./market-data.mjs";
+import { sessionForNow } from "./stock-analysis.mjs";
 
 const MAX_TIMELINE_ITEMS = 100;
 
@@ -46,6 +47,7 @@ export function createDailyReviewService({
   reviewStore,
   portfolioRepo = null,
   newsService = null,
+  sentimentService = null,
   now = () => Date.now(),
 } = {}) {
   if (!marketService) throw new TypeError("daily review requires a market service.");
@@ -142,7 +144,7 @@ export function createDailyReviewService({
         ts: `${resolvedDate}T15:05:00.000Z`,
         source: "ai",
         kind: "ai",
-        title: "AI 每日复盘",
+        title: aiEntry.session === "intraday" ? "AI 盘中总结" : "AI 每日复盘",
         summary: aiEntry.review?.overview ?? null,
         tone: "note",
         entry: aiEntry,
@@ -331,7 +333,19 @@ export function createDailyReviewService({
         title: `${item.title} ${item.name ?? ""}`.trim(),
         changePct: item.changePct ?? null,
       }));
-    return { date: resolvedDate, indices, market, positions, watch, events };
+    const sentiment = sentimentService
+      ? await sentimentService.getSentiment().catch(() => null)
+      : null;
+    return {
+      date: resolvedDate,
+      session: sessionForNow(new Date(now())),
+      indices,
+      market,
+      sentiment,
+      positions,
+      watch,
+      events,
+    };
   }
 
   return Object.freeze({

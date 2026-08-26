@@ -6,6 +6,25 @@
 import { randomUUID } from "node:crypto";
 
 import { stripJsonFence } from "./llm-client.mjs";
+import { DEFAULT_COACH_PROMPT, renderCoachPrompt } from "./coach-prompt.mjs";
+
+// 交易时段判定（A 股，本地时间）：盘前/早盘/午间休市/午盘/尾盘/盘后。
+// key 为存储用的两态：intraday（9:30-15:00 含午休）/ close。
+export function sessionForNow(input = new Date()) {
+  const date = input instanceof Date ? input : new Date(input);
+  const day = date.getDay();
+  const hm = date.getHours() * 100 + date.getMinutes();
+  const time = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  if (day === 0 || day === 6) {
+    return { key: "close", phase: "closed", label: "周末休市", time, isTrading: false };
+  }
+  if (hm < 930) return { key: "close", phase: "pre", label: "盘前", time, isTrading: false };
+  if (hm < 1130) return { key: "intraday", phase: "morning", label: "早盘 · 盘中", time, isTrading: true };
+  if (hm < 1300) return { key: "intraday", phase: "lunch", label: "午间休市 · 盘中", time, isTrading: true };
+  if (hm < 1430) return { key: "intraday", phase: "afternoon", label: "午盘 · 盘中", time, isTrading: true };
+  if (hm < 1500) return { key: "intraday", phase: "tail", label: "尾盘 · 盘中", time, isTrading: true };
+  return { key: "close", phase: "after", label: "盘后", time, isTrading: false };
+}
 
 const STATUS = { QUEUED: "queued", RUNNING: "running", COMPLETED: "completed", FAILED: "failed" };
 
@@ -330,14 +349,22 @@ verifications 仅汇总清单中「监控」字段的验证节点，没有则输
 
   // 四段式复盘教练（每日复盘页面「AI 每日总结」）：输出 markdown，
   // 数据缺口按约定标 [待补充]，事实与推测强制区分。
-  async function startCoachReview(context = {}) {
+  // promptTemplate 由路由传入（用户自定义或默认），数据段固定拼接其后。
+  async function startCoachReview(context = {}, { promptTemplate = null } = {}) {
     return start(async () => {
       const lines = [];
       lines.push("【今日指数】");
       for (const index of context.indices ?? []) {
-        lines.push(`- ${index.name}｜收盘 ${index.close ?? "?"}｜${fmtPct(index.changePct)}｜振幅 ${index.amplitudePct ?? "?"}%｜成交额 ${index.turnoverYi ?? "?"} 亿`);
+        lines.push(`- ${index.name}｜${context.session?.isTrading ? "盘中" : "收盘"} ${index.close ?? "?"}｜${fmtPct(index.changePct)}｜振幅 ${index.amplitudePct ?? "?"}%｜成交额 ${index.turnoverYi ?? "?"} 亿`);
       }
       lines.push(`- 两市成交额：${context.market?.turnoverYi ?? "?"} 亿（${context.market?.note ?? ""}）`);
+      const s = context.sentiment ?? {};
+      const sectors = (list) => Array.isArray(list)
+        ? list.map((item) => `${item.name} ${fmtPct(item.changePct)}`).join("、")
+        : null;
+      lines.push(`- 情绪面：上涨 ${s.upCount ?? "[待补充]"} 家 / 下跌 ${s.downCount ?? "[待补充]"} 家｜涨停 ${s.limitUp ?? "[待补充]"} 家｜最高连板 ${s.maxBoards ?? "[待补充]"} 板｜跌停 ${s.limitDown ?? "[待补充]"} 家｜炸板率 ${s.blastRate ?? "[待补充]"}%｜昨日涨停晋级率 ${s.promotionRate ?? "[待补充]"}%`);
+      lines.push(`- 领涨板块 ${sectors(s.topSectors) ?? "[待补充]"}｜领跌板块 ${sectors(s.bottomSectors) ?? "[待补充]"}`);
+      lines.push(`- 北证50：${s.bj50 ? `${s.bj50.close ?? "?"}（${fmtPct(s.bj50.changePct)}）` : "[待补充]"}`);
       lines.push("");
       lines.push("【当前持仓】（含技术位与成本）");
       for (const position of context.positions ?? []) {
@@ -361,29 +388,15 @@ verifications 仅汇总清单中「监控」字段的验证节点，没有则输
       }
       if ((context.events ?? []).length === 0) lines.push("- （空）");
 
-      const prompt = `今天是 ${context.date ?? "[日期缺失]"}。请基于下面的真实数据，严格执行四段式复盘。你的角色：15 年实盘经验的 A 股职业操盘手兼复盘教练——数据先行、逻辑严格、只讲事实与概率；不吹票、不荐股、不迎合；发现用户逻辑漏洞或情绪化操作直接指出。
-
-${lines.join("\n")}
-
-# 输出要求（Markdown，直接以正文开始，不要代码围栏）
-
-## 一、大盘与情绪面
-指数收盘与涨跌幅；两市成交额（环比[待补充]）。赚钱效应数据（涨跌家数/涨停跌停家数/连板高度/炸板率/晋级率/领涨领跌板块/北证50）系统暂未采集，逐项标注 [待补充]，但你可以基于给出的指数与振幅数据做有限的情绪推断，推断必须以「判断：」前缀并附依据与置信度（高/中/低）。用「冰点→回暖→发酵→高潮→分歧→退潮」框架定位当前情绪阶段，并给明日倾向预判（同样走「判断：」格式）。当日事件时间线为消息面素材。
-
-## 二、持仓个股诊断（逐只，勿遗漏）
-每只小节呈现：当日表现（涨跌幅/换手/量比/相对成本浮盈%）；技术面（日K形态一句话、关键支撑与压力位——必须基于给出的 60日高低/均线/近5日收盘给具体价位并注明依据，均线多空排列）；量价信号（放量上涨/缩量回调/放量滞涨/破位下跌四选一）；消息面（基于给出的当日新闻，无则[待补充]）；逻辑检验（对照备注的买入定位，被验证/中性/被破坏三选一）；操作建议（持有/加仓/减仓/清仓倾向+触发条件=具体价位+盘面信号+止损位）。所有建议必须同时附触发与失效条件，禁用「必涨」类表述。
-
-## 三、关注列表跟踪（逐只）
-当日表现一句话；距触发买点多远（基于现价与定位推断，价格距离%或等待什么信号）；结论三选一（继续观察/接近买点/逻辑走弱建议移出）。量比>2 或涨跌幅超±5% 的标注 ⚡ 并展开 3-5 句。
-
-## 四、明日作战计划
-大盘强势/中性/弱势三情景及粗略概率（「判断：」格式）与总仓位框架；每只持仓的明日预案（触发价/动作/仓位变化量/失效条件）；关注列表到达什么价位或信号可关注哪只（建议观察仓位与止损位）；2-3 个明日风险点（基于已有信息合理列出，无足够信息则说明）。
-
-# 硬约束
-1. 价格 2 位小数、百分比 2 位小数；事实直接陈述，推测必须「判断：」前缀+依据+置信度。
-2. 数据缺口标 [待补充]，严禁编造任何价格、成交量、新闻、公告。
-3. 不迎合既有观点：持仓逻辑若已破坏而用户未察觉，直接点明。
-4. 结尾用不超过 3 句话总结今日复盘核心结论（以「**今日核心**：」开头）。`;
+      const session = context.session ?? {};
+      const template = promptTemplate?.trim() || DEFAULT_COACH_PROMPT;
+      const sessionNote = session.isTrading
+        ? `\n\n【时段提示】当前为 ${session.label}（${session.time}），是盘中复盘：第一部分写盘中快照（非收盘定论），第四部分「下一时段作战计划」聚焦今日剩余交易时段的应对，而非明日。`
+        : `\n\n【时段提示】当前为 ${session.label}（${session.time}），收盘后复盘：按完整四段式输出，第四部分面向明日。`;
+      const prompt = renderCoachPrompt(template, {
+        date: context.date ?? "[日期缺失]",
+        session: session.label ?? "盘后",
+      }) + sessionNote + "\n\n# 今日真实数据\n\n" + lines.join("\n");
 
       const content = await llmClient.chatCompletion({
         messages: [
@@ -396,6 +409,7 @@ ${lines.join("\n")}
       const markdown = content.trim();
       return {
         generatedAt: new Date().toISOString(),
+        session: session.key ?? "close",
         markdown,
         overview: markdown.replace(/[#*`>\-]/g, "").slice(0, 120),
       };

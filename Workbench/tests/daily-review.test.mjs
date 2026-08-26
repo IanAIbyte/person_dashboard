@@ -70,18 +70,28 @@ test("daily review store overrides by date and keeps last 30 entries", async () 
 
   const first = await store.save("2026-08-25", { review: { overview: "第一版" } });
   assert.equal(first.review.overview, "第一版");
+  assert.equal(first.session, "close"); // 缺省 close
   await store.save("2026-08-25", { review: { overview: "覆盖版" }, stockCount: 27 });
   const entry = await store.get("2026-08-25");
   assert.equal(entry.review.overview, "覆盖版");
   assert.equal(entry.stockCount, 27);
   assert.equal((await store.list()).length, 1);
+  // 盘中/收盘双条：同日互不覆盖，get 可按 session 取。
+  await store.save("2026-08-25", { session: "intraday", review: { overview: "盘中版" } });
+  assert.equal((await store.list()).length, 2);
+  assert.equal((await store.get("2026-08-25", "intraday")).review.overview, "盘中版");
+  assert.equal((await store.get("2026-08-25", "close")).review.overview, "覆盖版");
+  await store.save("2026-08-25", { session: "intraday", review: { overview: "盘中二版" } });
+  assert.equal((await store.list()).length, 2); // 同 session 覆盖不新增
+  assert.equal((await store.get("2026-08-25", "intraday")).review.overview, "盘中二版");
 
-  for (let i = 1; i <= 32; i += 1) {
+  for (let i = 1; i <= 60; i += 1) {
     await store.save(`2026-09-${String(i).padStart(2, "0")}`, { review: { overview: `d${i}` } });
   }
   const entries = await store.list();
-  assert.equal(entries.length, 30);
-  assert.equal(entries[0].date, "2026-09-03");
+  // 此前已有 2 条（close+intraday）+ 60 = 62，上限 60 → 最早 2 条被淘汰。
+  assert.equal(entries.length, 60);
+  assert.equal(entries[0].date, "2026-09-01");
 });
 
 test("aggregation service merges timeline sources with ai pinned by time order", async () => {

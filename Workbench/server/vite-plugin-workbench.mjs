@@ -62,6 +62,8 @@ import { createDailyReviewStore, DAILY_REVIEW_PATH } from "./daily-review-store.
 import { createDailyReviewService } from "./daily-review.mjs";
 import { loadDailyReviewConfig } from "./daily-review-config.mjs";
 import { createPortfolioRepository, PORTFOLIO_PATH } from "./portfolio.mjs";
+import { createSentimentDataService } from "./sentiment-data.mjs";
+import { createCoachPromptRepository, COACH_PROMPT_PATH } from "./coach-prompt.mjs";
 import {
   obsidianGraphPayload,
   obsidianRelativePathFromId,
@@ -906,6 +908,8 @@ export function workbenchApiPlugin({
   const reviewEvents = createReviewEventsRepository({ vaultRoot });
   const dailyReviewStore = createDailyReviewStore({ vaultRoot });
   const portfolioRepo = createPortfolioRepository({ vaultRoot });
+  const sentimentService = createSentimentDataService();
+  const coachPrompt = createCoachPromptRepository({ vaultRoot });
   const dailyReview = createDailyReviewService({
     marketService: marketData,
     loadConfig: () => loadDailyReviewConfig(workbenchRoot),
@@ -914,6 +918,7 @@ export function workbenchApiPlugin({
     reviewStore: dailyReviewStore,
     portfolioRepo,
     newsService: stockNews,
+    sentimentService,
   });
   const readerExplanations = readerExplanationService ??
     createReaderExplanationsService({ vaultRoot });
@@ -2111,8 +2116,38 @@ export function workbenchApiPlugin({
 
           if (req.method === "GET" && url.pathname === "/api/daily-review/summary") {
             const date = url.searchParams.get("date") ?? "";
-            const entry = await dailyReviewStore.get(date);
-            return json(res, 200, { entry });
+            const [intraday, close] = await Promise.all([
+              dailyReviewStore.get(date, "intraday"),
+              dailyReviewStore.get(date, "close"),
+            ]);
+            return json(res, 200, { intraday, close });
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/daily-review/prompt") {
+            const current = await coachPrompt.get();
+            return json(res, 200, {
+              prompt: current.prompt,
+              customized: current.customized,
+              variables: ["{{date}}", "{{session}}"],
+            });
+          }
+
+          if (req.method === "PUT" && url.pathname === "/api/daily-review/prompt") {
+            const body = await readJson(req, 32 * 1024);
+            assertAllowedObjectKeys(body, new Set(["prompt"]), "INVALID_COACH_PROMPT_REQUEST");
+            try {
+              const saved = await coachPrompt.save(body.prompt);
+              vaultSync.notifyPaths([COACH_PROMPT_PATH]);
+              return json(res, 200, { ...saved, variables: ["{{date}}", "{{session}}"] });
+            } catch (error) {
+              return json(res, 400, { error: { message: error?.message || "提示词无效。" } });
+            }
+          }
+
+          if (req.method === "DELETE" && url.pathname === "/api/daily-review/prompt") {
+            const reset = await coachPrompt.reset();
+            vaultSync.notifyPaths([COACH_PROMPT_PATH]);
+            return json(res, 200, { ...reset, variables: ["{{date}}", "{{session}}"] });
           }
 
           const reviewSummaryMatch = url.pathname.match(
@@ -2123,7 +2158,7 @@ export function workbenchApiPlugin({
             const body = await readJson(req, 32 * 1024);
             assertAllowedObjectKeys(
               body,
-              new Set(["stockCount", "review"]),
+              new Set(["stockCount", "review", "session"]),
               "INVALID_REVIEW_SUMMARY_REQUEST",
             );
             try {
@@ -2139,14 +2174,23 @@ export function workbenchApiPlugin({
             const body = await readJson(req, 16 * 1024);
             assertAllowedObjectKeys(
               body,
-              new Set(["stocks", "date"]),
+              new Set(["stocks", "date", "session"]),
               "INVALID_REVIEW_GENERATE_REQUEST",
             );
             const context = await dailyReview.collectReviewContext(
               typeof body.date === "string" ? body.date : null,
               Array.isArray(body.stocks) ? body.stocks : [],
             );
-            const task = await stockAnalysis.startCoachReview(context);
+            if (body.session === "intraday" || body.session === "close") {
+              context.session = {
+                ...context.session,
+                key: body.session,
+                isTrading: body.session === "intraday",
+                label: body.session === "intraday" ? "盘中" : "盘后",
+              };
+            }
+            const { prompt: promptTemplate } = await coachPrompt.get();
+            const task = await stockAnalysis.startCoachReview(context, { promptTemplate });
             return json(res, 202, task);
           }
 

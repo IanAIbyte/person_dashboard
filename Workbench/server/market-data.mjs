@@ -21,12 +21,12 @@ export function tencentSymbol(code) {
   return `${code.startsWith("6") ? "sh" : "sz"}${code}`;
 }
 
-// 归一化腾讯符号：显式前缀（指数 sh000001 / 个股 sz000001）原样保留；
+// 归一化腾讯符号：显式前缀（指数 sh000001 / 北证 bj899000 / 个股 sz000001）原样保留；
 // 裸 6 位数字沿用个股规则。指数与个股同号段（000001 上证指数 vs 平安银行）
 // 靠前缀消歧，这是指数支持的关键。
 export function normalizeTencentSymbol(input) {
   if (typeof input !== "string") return null;
-  if (/^(sh|sz)\d{6}$/.test(input)) return input;
+  if (/^(sh|sz|bj)\d{6}$/.test(input)) return input;
   if (/^\d{6}$/.test(input)) return tencentSymbol(input);
   return null;
 }

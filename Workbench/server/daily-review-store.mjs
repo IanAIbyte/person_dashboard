@@ -21,7 +21,8 @@ export const DAILY_REVIEW_PATH =
 
 const STORE_VERSION = 1;
 const MAX_STORE_BYTES = 2 * 1024 * 1024;
-const MAX_ENTRIES = 30;
+const MAX_ENTRIES = 60;
+const SESSIONS = new Set(["intraday", "close"]);
 const MAX_TEXT_LENGTH = 8_000;
 const STORE_DIRECTORY = path.posix.dirname(DAILY_REVIEW_PATH);
 
@@ -118,6 +119,8 @@ function normalizeEntry(value) {
   if (verifications) review.verifications = verifications;
   return {
     date: normalizeDate(value.date),
+    // 盘中/收盘两版并存；旧数据无 session 视为 close。
+    session: SESSIONS.has(value.session) ? value.session : "close",
     generatedAt: value.generatedAt ? String(value.generatedAt) : null,
     stockCount: Number.isFinite(Number(value.stockCount)) ? Number(value.stockCount) : null,
     review,
@@ -239,27 +242,39 @@ export function createDailyReviewStore({
     return result;
   }
 
-  async function get(date) {
+  // session 传 "intraday"/"close" 取对应版本；缺省取当日最新（按生成时间）。
+  async function get(date, session = null) {
     const store = await mutate(() => readStore());
-    const entry = store.entries.find((item) => item.date === normalizeDate(date));
-    return entry ? clone(entry) : null;
+    const safeDate = normalizeDate(date);
+    const candidates = store.entries.filter(
+      (item) => item.date === safeDate && (session == null || item.session === session),
+    );
+    if (candidates.length === 0) return null;
+    const latest = candidates.reduce((best, item) =>
+      (item.generatedAt ?? "") > (best.generatedAt ?? "") ? item : best,
+    candidates[0]);
+    return clone(latest);
   }
 
   function save(date, payload = {}) {
     return mutate(async () => {
       const safeDate = normalizeDate(date);
+      const safeSession = SESSIONS.has(payload.session) ? payload.session : "close";
       const entry = normalizeEntry({
         date: safeDate,
+        session: safeSession,
         generatedAt: now().toISOString(),
         stockCount: payload.stockCount ?? null,
         review: payload.review ?? payload,
       });
       const store = await readStore();
       const entries = [
-        ...store.entries.filter((item) => item.date !== safeDate),
+        ...store.entries.filter(
+          (item) => !(item.date === safeDate && item.session === safeSession),
+        ),
         entry,
       ]
-        .sort((a, b) => (a.date < b.date ? -1 : 1))
+        .sort((a, b) => ((a.date + a.session) < (b.date + b.session) ? -1 : 1))
         .slice(-MAX_ENTRIES);
       await writeStore({ version: STORE_VERSION, updatedAt: now().toISOString(), entries });
       return clone(entry);

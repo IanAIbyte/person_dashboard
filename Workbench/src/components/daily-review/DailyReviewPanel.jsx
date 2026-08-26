@@ -24,10 +24,14 @@ import {
 import {
   addReviewEvent,
   getStockAnalysis,
+  loadCoachPrompt,
   loadDailyReviewIndices,
   loadDailyReviewKline,
+  loadDailyReviewSummary,
   loadDailyReviewTimeline,
   removeReviewEvent,
+  resetCoachPrompt,
+  saveCoachPrompt,
   saveDailyReviewSummary,
   startDailyReviewGenerate,
 } from "../../lib/api";
@@ -271,7 +275,7 @@ function TimelineRow({ item, onRemoved }) {
   );
 }
 
-function ReviewSummaryCard({ entry, stocks, date, onSaved }) {
+function SessionSummaryCard({ title, session, entry, stocks, date, onSaved }) {
   const [task, setTask] = useState(null);
   const [error, setError] = useState(null);
 
@@ -285,6 +289,7 @@ function ReviewSummaryCard({ entry, stocks, date, onSaved }) {
           try {
             await saveDailyReviewSummary(date, {
               stockCount: stocks.length,
+              session,
               review: next.result,
             });
             setTask(null);
@@ -303,12 +308,12 @@ function ReviewSummaryCard({ entry, stocks, date, onSaved }) {
       }
     }, 2000);
     return () => clearInterval(timer);
-  }, [task, date, stocks.length, onSaved]);
+  }, [task, date, session, stocks.length, onSaved]);
 
   const generate = async () => {
     setError(null);
     try {
-      const started = await startDailyReviewGenerate(stocks, date);
+      const started = await startDailyReviewGenerate(stocks, session, date);
       setTask({ id: started.id, status: "running" });
     } catch (caught) {
       setError(caught?.message || "无法启动生成");
@@ -321,10 +326,10 @@ function ReviewSummaryCard({ entry, stocks, date, onSaved }) {
   return (
     <div className="review-summary">
       <div className="review-summary__head">
-        <h3>AI 每日总结</h3>
+        <h3>{title}</h3>
         <button className="review-summary__generate" disabled={running} onClick={generate} type="button">
           <IconSparkles aria-hidden="true" size={13} />
-          {running ? "生成中…" : entry ? "重新生成" : "生成总结"}
+          {running ? "生成中…" : entry ? "重新生成" : "生成"}
         </button>
       </div>
       {review ? (
@@ -336,25 +341,130 @@ function ReviewSummaryCard({ entry, stocks, date, onSaved }) {
           ) : (
             <p className="review-summary__overview">{review.overview}</p>
           )}
-          {review.notable?.length ? (
-            <div><h4>值得注意</h4><ul>{review.notable.map((text, i) => <li key={i}>{text}</li>)}</ul></div>
-          ) : null}
-          {review.risks?.length ? (
-            <div><h4>风险提示</h4><ul>{review.risks.map((text, i) => <li key={i}>{text}</li>)}</ul></div>
-          ) : null}
-          {review.actions?.length ? (
-            <div><h4>跟踪动作</h4><ul>{review.actions.map((text, i) => <li key={i}>{text}</li>)}</ul></div>
-          ) : null}
           <span className="review-summary__meta">
             生成于 {entry.generatedAt ? new Date(entry.generatedAt).toLocaleString("zh-CN") : "—"}
           </span>
         </div>
       ) : (
         <p className="review-summary__empty">
-          今日尚未生成。点击生成会汇总指数、事件时间线与个股清单（需配置 ZHIPU_API_KEY）。
+          {session === "intraday"
+            ? "尚无盘中总结。交易时段点「生成」做盘中快照（侧重当下异动与剩余时段应对）。"
+            : "尚无收盘复盘。收盘后点「生成」出完整四段式复盘。"}
         </p>
       )}
       {error ? <p className="review-summary__error">{error}</p> : null}
+    </div>
+  );
+}
+
+function PromptEditor() {
+  const [promptResult, setPromptResult] = useState({ data: null, source: "loading" });
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [state, setState] = useState(null);
+
+  const reload = useCallback(() => {
+    loadCoachPrompt().then((result) => {
+      setPromptResult(result);
+      setDraft(result.data?.prompt ?? "");
+    });
+  }, []);
+  useEffect(() => { reload(); }, [reload]);
+
+  const save = async () => {
+    setBusy(true);
+    setState(null);
+    try {
+      await saveCoachPrompt(draft);
+      setState({ ok: true, message: "已保存,下次生成即生效" });
+      reload();
+    } catch (caught) {
+      setState({ ok: false, message: caught?.message || "保存失败" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const reset = async () => {
+    setBusy(true);
+    setState(null);
+    try {
+      const result = await resetCoachPrompt();
+      setDraft(result.prompt);
+      setState({ ok: true, message: "已恢复默认模板" });
+    } catch (caught) {
+      setState({ ok: false, message: caught?.message || "重置失败" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <details className="review-prompt">
+      <summary>
+        自定义提示词{promptResult.data?.customized ? "（已自定义）" : "（默认）"}
+      </summary>
+      <p className="review-prompt__hint">
+        变量：<code>{"{{date}}"}</code> 日期、<code>{"{{session}}"}</code> 时段标签。
+        数据事实段（指数/持仓/情绪面/事件）由系统自动拼接在模板之后，不受编辑影响。
+      </p>
+      <textarea
+        aria-label="复盘提示词模板"
+        className="review-prompt__editor"
+        onChange={(e) => setDraft(e.target.value)}
+        rows={14}
+        value={draft}
+      />
+      <div className="review-prompt__ops">
+        <button disabled={busy || !draft.trim()} onClick={save} type="button">保存</button>
+        <button disabled={busy} onClick={reset} type="button">恢复默认</button>
+        {state ? (
+          <span className={state.ok ? "review-prompt__ok" : "review-prompt__err"}>{state.message}</span>
+        ) : null}
+      </div>
+    </details>
+  );
+}
+
+function ReviewSummaryBlock({ stocks, date, onSaved }) {
+  const [summaries, setSummaries] = useState({ intraday: null, close: null });
+
+  const reload = useCallback(() => {
+    loadDailyReviewSummary(date).then((result) => {
+      setSummaries({
+        intraday: result.data?.intraday ?? null,
+        close: result.data?.close ?? null,
+      });
+    });
+  }, [date]);
+  useEffect(() => { reload(); }, [reload]);
+
+  const saved = useCallback(() => {
+    reload();
+    onSaved?.();
+  }, [reload, onSaved]);
+
+  return (
+    <div className="review-summary-block">
+      <div className="review-summary-grid">
+        <SessionSummaryCard
+          date={date}
+          entry={summaries.intraday}
+          onSaved={saved}
+          session="intraday"
+          stocks={stocks}
+          title="AI 盘中总结"
+        />
+        <SessionSummaryCard
+          date={date}
+          entry={summaries.close}
+          onSaved={saved}
+          session="close"
+          stocks={stocks}
+          title="AI 收盘复盘"
+        />
+      </div>
+      <PromptEditor />
     </div>
   );
 }
@@ -373,7 +483,6 @@ export function DailyReviewPanel({ stocks = [], portfolioSlot = null }) {
 
   const indices = indicesResult.data?.indices ?? [];
   const timeline = timelineResult.data?.items ?? [];
-  const aiEntry = timeline.find((item) => item.source === "ai")?.entry ?? null;
 
   return (
     <section className="review-panel" aria-label="每日复盘">
@@ -396,7 +505,7 @@ export function DailyReviewPanel({ stocks = [], portfolioSlot = null }) {
 
       {portfolioSlot}
 
-      <ReviewSummaryCard entry={aiEntry} stocks={stocks} date={date} onSaved={reload} />
+      <ReviewSummaryBlock stocks={stocks} date={date} onSaved={reload} />
 
       <div className="review-timeline-block">
         <h3>当日事件时间线</h3>
