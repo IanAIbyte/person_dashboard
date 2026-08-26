@@ -359,7 +359,7 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
       <PageHeader
         eyebrow="MARKET · DAILY REVIEW"
         title="每日复盘"
-        description="每日复盘各大指数走势与当日重要事件；下方保留科技半导体个股清单——AI 按研究方法论打底座，判断留给你。研究辅助，不构成投资建议。"
+        description="三区工作台：今日复盘（指数·持仓·AI 总结）、个股清单、监控。AI 按研究方法论打底座，判断留给你。研究辅助，不构成投资建议。"
         aside={headerAside}
       />
 

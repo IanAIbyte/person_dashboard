@@ -187,6 +187,36 @@
   line-height: 1.6;
 }
 
+.review-summary__core {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--accent-soft);
+  background: var(--surface);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+
+.review-summary__core p {
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.review-summary__expand {
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--ink-soft);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.review-summary__expand:hover {
+  border-color: var(--accent-soft);
+  color: var(--accent);
+}
+
 .review-summary__meta {
   display: block;
   margin-top: 8px;

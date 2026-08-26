@@ -42,6 +42,14 @@ import "./daily-review.css";
 const TONE_LABELS = { info: "记录", up: "偏多", down: "偏空", note: "备注" };
 const SOURCE_LABELS = { watchdog: "异动", manual: "手动", ai: "AI" };
 
+// 从复盘 markdown 末尾摘「今日核心」三句（prompt 约定以 **今日核心**： 开头）。
+function extractCore(markdown) {
+  if (!markdown) return null;
+  const match = markdown.match(/\*\*今日核心\*\*[：:]\s*([\s\S]+?)\n*(?:$|\n##)/);
+  const text = match?.[1]?.replace(/\*\*/g, "").replace(/^[-*]\s*/gm, "").trim();
+  return text || null;
+}
+
 function formatTime(ts) {
   if (!ts) return "--:--";
   return new Date(ts).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
@@ -280,6 +288,7 @@ function TimelineRow({ item, onRemoved }) {
 function SessionSummaryCard({ title, session, entry, stocks, date, onSaved }) {
   const [task, setTask] = useState(null);
   const [error, setError] = useState(null);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     if (task?.status !== "running") return undefined;
@@ -324,6 +333,7 @@ function SessionSummaryCard({ title, session, entry, stocks, date, onSaved }) {
 
   const running = task?.status === "running";
   const review = entry?.review;
+  const core = extractCore(review?.markdown);
 
   return (
     <div className="review-summary">
@@ -339,12 +349,28 @@ function SessionSummaryCard({ title, session, entry, stocks, date, onSaved }) {
           <span className="review-summary__meta">
             生成于 {entry.generatedAt ? new Date(entry.generatedAt).toLocaleString("zh-CN") : "—"}
           </span>
-          {review.markdown ? (
-            <div className="review-summary__markdown">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{review.markdown}</ReactMarkdown>
+          {review.markdown && core && !expanded ? (
+            <div className="review-summary__core">
+              <p>{core}</p>
+              <button className="review-summary__expand" onClick={() => setExpanded(true)} type="button">
+                展开全文 ▾
+              </button>
             </div>
           ) : (
-            <p className="review-summary__overview">{review.overview}</p>
+            <>
+              {review.markdown ? (
+                <div className="review-summary__markdown">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{review.markdown}</ReactMarkdown>
+                </div>
+              ) : (
+                <p className="review-summary__overview">{review.overview}</p>
+              )}
+              {core ? (
+                <button className="review-summary__expand" onClick={() => setExpanded(false)} type="button">
+                  收起 ▴
+                </button>
+              ) : null}
+            </>
           )}
         </div>
       ) : (
