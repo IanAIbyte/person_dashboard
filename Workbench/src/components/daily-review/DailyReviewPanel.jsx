@@ -283,6 +283,8 @@ function TimelineRow({ item, onRemoved }) {
 const SENTIMENT_STAGES = ["冰点", "回暖", "发酵", "高潮", "分歧", "退潮"];
 const ACTION_TONE = { 持有: "hold", 加仓: "up", 减仓: "down", 清仓: "flat" };
 const LOGIC_TONE = { 被验证: "ok", 中性: "flat", 被破坏: "bad" };
+// 关注列表排序：可操作的靠前。
+const WATCH_ORDER = { 接近买点: 0, 建议移出: 1, 继续观察: 2 };
 
 function StatTile({ label, value, tone = "" }) {
   return (
@@ -409,18 +411,29 @@ function CoachReport({ structured }) {
         ) : <p className="coach-note">（空仓）</p>}
       </section>
       <section className="coach-section" aria-label="关注跟踪">
-        <h4>三、关注跟踪</h4>
+        <h4>三、关注跟踪 <span className="coach-watch__count">{watch.length} 只</span></h4>
         {watch.length ? (
-          <ul className="coach-watch">
-            {watch.map((item) => (
-              <li key={item.name} className={item.flash ? "coach-watch__item--flash" : ""}>
-                <b>{item.flash ? "⚡ " : ""}{item.name}</b>
-                {item.conclusion ? <span className="coach-watch__conclusion">{item.conclusion}</span> : null}
-                {item.distance ? <span className="coach-watch__distance">{item.distance}</span> : null}
-                {item.note ? <span className="coach-note">{item.note}</span> : null}
-              </li>
-            ))}
-          </ul>
+          <>
+            <div className="coach-watch__header" aria-hidden="true">
+              <span>股票</span><span>结论</span><span>距买点</span><span>点评</span>
+            </div>
+            <ul className="coach-watch">
+              {[...watch]
+                .sort((a, b) => (WATCH_ORDER[a.conclusion] ?? 9) - (WATCH_ORDER[b.conclusion] ?? 9))
+                .map((item) => (
+                  <li key={item.name} className={item.flash ? "coach-watch__item--flash" : ""}>
+                    <b title={item.note}>{item.flash ? "⚡ " : ""}{item.name}</b>
+                    {item.conclusion ? (
+                      <span className={`coach-watch__conclusion${item.conclusion === "接近买点" ? " coach-watch__conclusion--near" : item.conclusion === "建议移出" ? " coach-watch__conclusion--out" : ""}`}>
+                        {item.conclusion}
+                      </span>
+                    ) : <span />}
+                    <span className="coach-watch__distance" title={item.distance}>{item.distance || "—"}</span>
+                    <span className="coach-watch__note" title={item.note}>{item.note || "—"}</span>
+                  </li>
+                ))}
+            </ul>
+          </>
         ) : <p className="coach-note">（空）</p>}
       </section>
       <PlanSection plan={structured?.plan} />
