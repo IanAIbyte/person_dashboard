@@ -11,7 +11,9 @@
   margin: 0 0 18px;
   padding: 8px 0;
   border-bottom: 1px solid var(--line);
-  background: var(--bg);
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .review-tabs__tab {
