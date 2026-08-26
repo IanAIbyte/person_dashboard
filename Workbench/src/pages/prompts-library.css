@@ -2,6 +2,7 @@
 
 .prompts-toolbar {
   display: flex;
+  flex-wrap: wrap; /* 窄屏：搜索框独占一行，段控与按钮换行 */
   gap: 10px;
   align-items: center;
   margin-bottom: 10px;
@@ -9,7 +10,8 @@
 
 .prompts-search {
   display: flex;
-  flex: 1 1 auto;
+  flex: 1 1 220px;
+  min-width: 180px;
   align-items: center;
   gap: 8px;
   min-height: 34px;
@@ -224,7 +226,7 @@
   border: 1px solid var(--accent-soft);
   border-radius: var(--r-md);
   background: var(--surface);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 12px 40px rgba(24, 24, 27, 0.16); /* zinc 系着色，非纯黑 */
   display: grid;
   gap: 10px;
 }
@@ -329,6 +331,36 @@
 .prompts-optimizer__apply {
   border-color: var(--accent-soft) !important;
   color: var(--accent) !important;
+}
+
+/* 检索骨架：与结果卡同形的 shimmer 占位（prefers-reduced-motion 下静止）。 */
+.prompts-skeleton {
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  padding: 0 12px;
+}
+
+.prompts-skeleton__line {
+  height: 12px;
+  margin: 10px 0;
+  border-radius: 4px;
+  background: linear-gradient(100deg, var(--surface-sunken) 40%, #e9e9ec 50%, var(--surface-sunken) 60%);
+  background-size: 200% 100%;
+  animation: prompts-shimmer 1.4s ease-in-out infinite;
+}
+
+.prompts-skeleton__line:last-child {
+  width: 62%;
+  margin-bottom: 12px;
+}
+
+@keyframes prompts-shimmer {
+  to { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prompts-skeleton__line { animation: none; }
 }
 
 .prompts-empty {

@@ -13,6 +13,9 @@ const LANG_OPTIONS = [
   { key: "en", label: "英文" },
 ];
 
+// 排版规范：模板原文中的长破折号展示与复制时统一降级为普通连字符（语义不变）。
+const noDash = (text) => (typeof text === "string" ? text.replace(/[—–]/g, "-") : text);
+
 export function PromptsLibraryPage() {
   const [query, setQuery] = useState("");
   const [lang, setLang] = useState("all");
@@ -48,7 +51,7 @@ export function PromptsLibraryPage() {
     const item = result.items[index];
     if (!item) return;
     try {
-      await navigator.clipboard.writeText(item.prompt);
+      await navigator.clipboard.writeText(noDash(item.prompt));
       setCopiedIndex(index);
       window.setTimeout(() => setCopiedIndex(-1), 1500);
     } catch { /* 剪贴板被拒时静默 */ }
@@ -94,7 +97,7 @@ export function PromptsLibraryPage() {
   };
 
   const copyText = async (text) => {
-    try { await navigator.clipboard.writeText(text); } catch { /* 剪贴板被拒时静默 */ }
+    try { await navigator.clipboard.writeText(noDash(text)); } catch { /* 剪贴板被拒时静默 */ }
   };
 
   const stats = result.stats;
@@ -154,6 +157,16 @@ export function PromptsLibraryPage() {
 
       {error ? <div className="prompts-error">{error}</div> : null}
 
+      {loading ? (
+        <div className="prompts-list" aria-hidden="true">
+          {[0, 1, 2].map((key) => (
+            <div className="prompts-skeleton" key={key}>
+              <div className="prompts-skeleton__line" style={{ width: "38%" }} />
+              <div className="prompts-skeleton__line" />
+            </div>
+          ))}
+        </div>
+      ) : (
       <ul className="prompts-list">
         {result.items.map((item, index) => (
           <li className={`prompts-item${openIndex === index ? " prompts-item--open" : ""}`} key={`${item.source}-${item.act}`}>
@@ -167,10 +180,10 @@ export function PromptsLibraryPage() {
                 {item.lang === "zh" ? "中文" : "EN"}
               </span>
             </button>
-            <p className="prompts-item__preview">{item.prompt}</p>
+            <p className="prompts-item__preview">{noDash(item.prompt)}</p>
             {openIndex === index ? (
               <div className="prompts-item__body">
-                <pre>{item.prompt}</pre>
+                <pre>{noDash(item.prompt)}</pre>
                 <div className="prompts-item__ops">
                   <button
                     className="prompts-item__copy"
@@ -194,6 +207,7 @@ export function PromptsLibraryPage() {
           </li>
         ))}
       </ul>
+      )}
 
       {!loading && result.items.length === 0 && !error ? (
         <div className="prompts-empty">
