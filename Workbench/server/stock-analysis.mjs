@@ -390,8 +390,8 @@ ${lines.join("\n")}
           { role: "system", content: systemPrompt() },
           { role: "user", content: prompt },
         ],
-        // 四段式长文 + 27 只关注股逐只跟踪，生成耗时显著长于普通总结。
-        timeoutMs: 420_000,
+        // 四段式长文 + 27 只关注股逐只跟踪，生成时长波动大（实测 190-400s+）。
+        timeoutMs: 600_000,
       });
       const markdown = content.trim();
       return {

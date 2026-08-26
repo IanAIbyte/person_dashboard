@@ -25,6 +25,32 @@ export function stripJsonFence(value) {
   return (fenced ? fenced[1] : text).trim();
 }
 
+// 聚合 OpenAI 兼容 SSE 流：data: {choices[0].delta.content} … data: [DONE]。
+export async function readStreamContent(response) {
+  const parts = [];
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for await (const chunk of response.body) {
+    // chunk 是 Uint8Array，.toString() 会变成逗号数字串，必须走 TextDecoder。
+    buffer += decoder.decode(chunk, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+      const data = trimmed.slice(5).trim();
+      if (!data || data === "[DONE]") continue;
+      try {
+        const delta = JSON.parse(data)?.choices?.[0]?.delta?.content;
+        if (typeof delta === "string") parts.push(delta);
+      } catch {
+        // 半行/心跳行忽略，等下一片补全。
+      }
+    }
+  }
+  return parts.join("");
+}
+
 export function createLlmClient({
   baseUrl = process.env.ZHIPU_BASE_URL?.trim() || ZHIPU_DEFAULT_BASE_URL,
   apiKey = process.env.ZHIPU_API_KEY,
@@ -58,7 +84,8 @@ export function createLlmClient({
             "Content-Type": "application/json",
             Authorization: `Bearer ${apiKey}`,
           },
-          body: JSON.stringify({ model, messages }),
+          // 长文生成必须流式：非流式连接静默数分钟会被网络层掐断（fetch failed）。
+          body: JSON.stringify({ model, messages, stream: true }),
           signal: controller.signal,
         });
         if (!response.ok) {
@@ -73,8 +100,7 @@ export function createLlmClient({
           if (attempt < maxRetries && (status === 429 || status >= 500)) continue;
           throw lastError;
         }
-        const payload = await response.json();
-        const content = payload?.choices?.[0]?.message?.content;
+        const content = await readStreamContent(response);
         if (typeof content !== "string" || !content.trim()) {
           throw fail("LLM_EMPTY_RESULT", "LLM 未返回有效内容。");
         }
