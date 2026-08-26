@@ -29,11 +29,13 @@ import {
   loadDailyReviewKline,
   loadDailyReviewSummary,
   loadDailyReviewTimeline,
+  loadReviewSchedule,
   removeReviewEvent,
   resetCoachPrompt,
   saveCoachPrompt,
   saveDailyReviewSummary,
   startDailyReviewGenerate,
+  updateReviewSchedule,
 } from "../../lib/api";
 import "./daily-review.css";
 
@@ -426,6 +428,62 @@ function PromptEditor() {
   );
 }
 
+// 调度设置行：交易日到点自动生成收盘总结（独立于盯盘配置）。
+function ScheduleRow() {
+  const [schedule, setSchedule] = useState({ enabled: true, time: "15:05" });
+  const [saved, setSaved] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadReviewSchedule().then((result) => {
+      if (!cancelled && result.data) setSchedule(result.data);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const patch = async (updates) => {
+    const next = { ...schedule, ...updates };
+    setSchedule(next);
+    try {
+      const result = await updateReviewSchedule(updates);
+      setSchedule(result);
+      setSaved({ ok: true });
+    } catch {
+      setSaved({ ok: false });
+    }
+    setTimeout(() => setSaved(null), 1500);
+  };
+
+  return (
+    <div className="review-schedule">
+      <label className="review-schedule__field">
+        <input
+          checked={schedule.enabled}
+          onChange={(e) => patch({ enabled: e.target.checked })}
+          type="checkbox"
+        />
+        <span>每个交易日 {schedule.time} 自动生成</span>
+      </label>
+      <input
+        aria-label="自动生成时间"
+        className="review-schedule__time"
+        onBlur={(e) => {
+          if (/^\d{2}:\d{2}$/.test(e.target.value) && e.target.value !== schedule.time) {
+            patch({ time: e.target.value });
+          }
+        }}
+        type="time"
+        value={schedule.time}
+      />
+      {saved ? (
+        <span className={saved.ok ? "review-prompt__ok" : "review-prompt__err"}>
+          {saved.ok ? "已保存" : "保存失败"}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function ReviewSummaryBlock({ stocks, date, onSaved }) {
   const [summaries, setSummaries] = useState({ intraday: null, close: null });
 
@@ -454,6 +512,7 @@ function ReviewSummaryBlock({ stocks, date, onSaved }) {
         stocks={stocks}
         title="AI 每日总结"
       />
+      <ScheduleRow />
       <PromptEditor />
     </div>
   );

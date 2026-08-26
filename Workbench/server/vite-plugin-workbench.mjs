@@ -64,6 +64,7 @@ import { loadDailyReviewConfig } from "./daily-review-config.mjs";
 import { createPortfolioRepository, PORTFOLIO_PATH } from "./portfolio.mjs";
 import { createSentimentDataService } from "./sentiment-data.mjs";
 import { createCoachPromptRepository, COACH_PROMPT_PATH } from "./coach-prompt.mjs";
+import { createReviewScheduleRepository, REVIEW_SCHEDULE_PATH } from "./review-schedule.mjs";
 import {
   obsidianGraphPayload,
   obsidianRelativePathFromId,
@@ -910,6 +911,7 @@ export function workbenchApiPlugin({
   const portfolioRepo = createPortfolioRepository({ vaultRoot });
   const sentimentService = createSentimentDataService();
   const coachPrompt = createCoachPromptRepository({ vaultRoot });
+  const reviewSchedule = createReviewScheduleRepository({ vaultRoot });
   const dailyReview = createDailyReviewService({
     marketService: marketData,
     loadConfig: () => loadDailyReviewConfig(workbenchRoot),
@@ -1133,6 +1135,62 @@ export function workbenchApiPlugin({
     });
   }
 
+  // 收盘后自动生成「AI 每日总结」：常驻调度（交易日 ≥15:05 触发一次；
+  // 当日已有收盘版则跳过，避免覆盖手动生成；失败仅记日志，当日不重试）。
+  let autoReviewDoneDate = null;
+  let autoReviewRunning = false;
+  async function runAutoReview() {
+    if (autoReviewRunning) return;
+    // 调度配置每 tick 重读：页面改开关/时间即时生效（独立于盯盘配置）。
+    const schedule = await reviewSchedule.get();
+    if (!schedule.enabled) return;
+    const at = new Date();
+    const day = at.getDay();
+    if (day === 0 || day === 6) return;
+    const [hh, mm] = schedule.time.split(":").map(Number);
+    if (at.getHours() * 100 + at.getMinutes() < hh * 100 + mm) return;
+    const date = at.toISOString().slice(0, 10);
+    if (autoReviewDoneDate === date) return;
+    autoReviewRunning = true;
+    try {
+      if (await dailyReviewStore.get(date, "close")) {
+        autoReviewDoneDate = date;
+        return;
+      }
+      const pool = await stockPool.pool(await stockCodes.overrides());
+      const stocks = pool
+        .filter((item) => item.code)
+        .map(({ name, code, note }) => ({ name, code, note }));
+      const context = await dailyReview.collectReviewContext(date, stocks);
+      const { prompt: promptTemplate } = await coachPrompt.get();
+      const started = await stockAnalysis.startCoachReview(context, { promptTemplate });
+      const deadline = Date.now() + 12 * 60_000;
+      for (;;) {
+        await new Promise((resolve) => setTimeout(resolve, 10_000));
+        const task = stockAnalysis.get(started.id);
+        if (task?.status === "completed") {
+          await dailyReviewStore.save(date, {
+            stockCount: stocks.length,
+            session: "close",
+            review: task.result,
+          });
+          vaultSync.notifyPaths([DAILY_REVIEW_PATH]);
+          console.log(`[workbench] 收盘自动总结完成：${date}（${stocks.length} 只关注股）`);
+          break;
+        }
+        if (task?.status === "failed" || Date.now() > deadline) {
+          console.log(`[workbench] 收盘自动总结未完成：${task?.error?.message ?? "等待超时"}`);
+          break;
+        }
+      }
+    } catch (error) {
+      console.log(`[workbench] 收盘自动总结失败：${error?.message ?? error}`);
+    } finally {
+      autoReviewRunning = false;
+      autoReviewDoneDate = date;
+    }
+  }
+
   return {
     name: "personal-kb-workbench-api",
     async closeBundle() {
@@ -1141,7 +1199,15 @@ export function workbenchApiPlugin({
     },
     configureServer(server) {
       vaultSync.attachWatcher(server.watcher);
+      // 收盘后自动生成「AI 每日总结」：每分钟检查，到点（默认 15:05，可配）触发一次；
+      // 当日已有收盘版（手动生成过）则跳过，避免覆盖。
+      // unref：定时器不阻止进程退出（测试环境 instantiate 插件后能正常收尾）。
+      const autoReviewTimer = setInterval(() => {
+        void runAutoReview().catch(() => {});
+      }, 60_000);
+      autoReviewTimer.unref?.();
       server.httpServer?.once("close", () => {
+        clearInterval(autoReviewTimer);
         void vaultSync.close();
       });
       server.middlewares.use(async (req, res, next) => {
@@ -2121,6 +2187,26 @@ export function workbenchApiPlugin({
               dailyReviewStore.get(date, "close"),
             ]);
             return json(res, 200, { intraday, close });
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/daily-review/schedule") {
+            return json(res, 200, await reviewSchedule.get());
+          }
+
+          if (req.method === "PUT" && url.pathname === "/api/daily-review/schedule") {
+            const body = await readJson(req, 2 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["enabled", "time"]),
+              "INVALID_REVIEW_SCHEDULE_REQUEST",
+            );
+            try {
+              const saved = await reviewSchedule.save(body);
+              vaultSync.notifyPaths([REVIEW_SCHEDULE_PATH]);
+              return json(res, 200, saved);
+            } catch (error) {
+              return json(res, 400, { error: { message: error?.message || "调度配置无效。" } });
+            }
           }
 
           if (req.method === "GET" && url.pathname === "/api/daily-review/prompt") {

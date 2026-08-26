@@ -754,6 +754,22 @@ export async function resetCoachPrompt() {
   return result;
 }
 
+export function loadReviewSchedule() {
+  return withFallback(
+    () => cachedGet("/api/daily-review/schedule", 10_000),
+    () => ({ enabled: true, time: "15:05", customized: false }),
+  );
+}
+
+export async function updateReviewSchedule(patch) {
+  const result = await request("/api/daily-review/schedule", {
+    method: "PUT",
+    body: JSON.stringify(patch),
+  });
+  invalidateCache("/api/daily-review/schedule");
+  return result;
+}
+
 export async function addReviewEvent(payload) {
   const event = await request("/api/daily-review/events", {
     method: "POST",
