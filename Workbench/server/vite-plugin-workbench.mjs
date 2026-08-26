@@ -911,7 +911,7 @@ export function workbenchApiPlugin({
   const dailyReviewStore = createDailyReviewStore({ vaultRoot });
   const portfolioRepo = createPortfolioRepository({ vaultRoot });
   const sentimentService = createSentimentDataService();
-  const promptsLibrary = createPromptsLibrary();
+  const promptsLibrary = createPromptsLibrary({ llmClient });
   const coachPrompt = createCoachPromptRepository({ vaultRoot });
   const reviewSchedule = createReviewScheduleRepository({ vaultRoot });
   const dailyReview = createDailyReviewService({
@@ -2191,6 +2191,32 @@ export function workbenchApiPlugin({
               dailyReviewStore.get(date, "close"),
             ]);
             return json(res, 200, { intraday, close });
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/prompts/suggest") {
+            const body = await readJson(req, 2_000).catch(() => null);
+            const idea = typeof body?.idea === "string" ? body.idea.trim() : "";
+            if (!idea) return json(res, 400, { error: { code: "BAD_REQUEST", message: "缺少 idea" } });
+            try {
+              return json(res, 200, await promptsLibrary.suggestKeywords(idea));
+            } catch (error) {
+              return json(res, 502, { error: { code: "LLM_FAILED", message: error?.message ?? "AI 检索失败" } });
+            }
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/prompts/optimize") {
+            const body = await readJson(req, 32_000).catch(() => null);
+            const idea = typeof body?.idea === "string" ? body.idea.trim() : "";
+            const template = typeof body?.template === "string" ? body.template : "";
+            const context = typeof body?.context === "string" ? body.context : "";
+            if (!idea || !template) {
+              return json(res, 400, { error: { code: "BAD_REQUEST", message: "缺少 idea 或 template" } });
+            }
+            try {
+              return json(res, 200, await promptsLibrary.optimize({ idea, template, context }));
+            } catch (error) {
+              return json(res, 502, { error: { code: "LLM_FAILED", message: error?.message ?? "AI 优化失败" } });
+            }
           }
 
           if (req.method === "GET" && url.pathname === "/api/prompts") {

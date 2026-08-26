@@ -81,3 +81,35 @@ test("library throws when no source ever succeeded", async () => {
   const library = createPromptsLibrary({ fetchImpl: makeFakeFetch({ zh: null, en: null }), now: () => 1_000 });
   await assert.rejects(() => library.search({}), /不可用|failed|down|HTTP/i);
 });
+
+test("suggestKeywords and optimize route through llmClient", async () => {
+  const calls = [];
+  const llmClient = {
+    chatCompletion: async ({ messages }) => {
+      calls.push(messages);
+      if (messages[1].content.includes("搜索关键词翻译器") || messages[0].content.includes("搜索关键词翻译器")) {
+        return "linux terminal assistant\n多余行";
+      }
+      return "优化后的提示词正文";
+    },
+  };
+  const library = createPromptsLibrary({ fetchImpl: makeFakeFetch(), llmClient, now: () => 1_000 });
+
+  const keywords = await library.suggestKeywords("帮我找一个终端助手");
+  assert.equal(keywords, "linux terminal assistant"); // 只取首行
+
+  const optimized = await library.optimize({
+    idea: "复盘交易",
+    template: "Linux Terminal",
+    context: "A股",
+  });
+  assert.equal(optimized.prompt, "优化后的提示词正文");
+  const userContent = calls.at(-1)[1].content;
+  assert.ok(userContent.includes("复盘交易") && userContent.includes("Linux Terminal") && userContent.includes("A股"));
+});
+
+test("suggest and optimize fail fast without llmClient", async () => {
+  const library = createPromptsLibrary({ fetchImpl: makeFakeFetch(), now: () => 1_000 });
+  await assert.rejects(() => library.suggestKeywords("x"), /LLM 未配置/);
+  await assert.rejects(() => library.optimize({ idea: "x", template: "y" }), /LLM 未配置/);
+});

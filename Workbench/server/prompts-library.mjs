@@ -42,8 +42,51 @@ export function parsePromptsCsv(text) {
     .filter((item) => item.act && item.prompt);
 }
 
-export function createPromptsLibrary({ fetchImpl = globalThis.fetch, now = Date.now, log = console.log } = {}) {
+export function createPromptsLibrary({ fetchImpl = globalThis.fetch, llmClient = null, now = Date.now, log = console.log } = {}) {
   let cache = null; // { index, docs, zhCount, enCount, fetchedAt, stale }
+
+  // AI 辅助检索：中文想法 → 英文搜索关键词（命中英文库）。
+  async function suggestKeywords(idea) {
+    if (!llmClient) throw new Error("LLM 未配置");
+    const content = await llmClient.chatCompletion({
+      messages: [
+        {
+          role: "system",
+          content:
+            "你是搜索关键词翻译器。用户给一个中文的想法/场景，你输出一行英文搜索关键词（3-6 个词，空格分隔，小写），用于在英文提示词模板库里检索。只输出关键词行，不要任何解释。",
+        },
+        { role: "user", content: String(idea).slice(0, 500) },
+      ],
+      timeoutMs: 30_000,
+    });
+    return content.trim().split("\n")[0].slice(0, 200);
+  }
+
+  // AI 优化：想法 + 模板 + 上下文 → 定制提示词。
+  async function optimize({ idea, template, context = "" } = {}) {
+    if (!llmClient) throw new Error("LLM 未配置");
+    const content = await llmClient.chatCompletion({
+      messages: [
+        {
+          role: "system",
+          content:
+            "你是资深提示词工程师。基于用户想法与参考模板，产出一个可直接使用的中文提示词：结构清晰（角色/任务/约束/输出格式按需分段），保留模板中可复用的骨架，融入用户想法与上下文的具体要求。直接输出提示词正文，不要解释、不要围栏。长度控制在 800 字内。",
+        },
+        {
+          role: "user",
+          content: [
+            `【我的想法】\n${String(idea).slice(0, 2000)}`,
+            `【参考模板】\n${String(template).slice(0, 4000)}`,
+            context ? `【我的上下文】\n${String(context).slice(0, 2000)}` : "",
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
+        },
+      ],
+      timeoutMs: 120_000,
+    });
+    return { prompt: content.trim() };
+  }
 
   async function fetchText(url) {
     const response = await fetchImpl(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
@@ -137,5 +180,5 @@ export function createPromptsLibrary({ fetchImpl = globalThis.fetch, now = Date.
     };
   }
 
-  return { search };
+  return { search, suggestKeywords, optimize };
 }

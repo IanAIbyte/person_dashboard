@@ -774,6 +774,24 @@ export function searchPrompts(q, lang) {
   return request(`/api/prompts?${params}`);
 }
 
+// AI 辅助检索：中文想法 → 英文关键词。
+export function suggestPromptKeywords(idea) {
+  return request("/api/prompts/suggest", {
+    method: "POST",
+    body: JSON.stringify({ idea }),
+    timeout: 40_000,
+  });
+}
+
+// AI 优化：想法 + 模板 + 上下文 → 定制提示词。
+export function optimizePrompt({ idea, template, context }) {
+  return request("/api/prompts/optimize", {
+    method: "POST",
+    body: JSON.stringify({ idea, template, context }),
+    timeout: 150_000,
+  });
+}
+
 export async function updateReviewSchedule(patch) {
   const result = await request("/api/daily-review/schedule", {
     method: "PUT",
