@@ -111,6 +111,10 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
   // 多列排序链：[{ key, dir }]，空数组 = 池自然顺序。Shift+点击追加/翻转，单击重置单列。
   const [sortChain, setSortChain] = useState(() => []);
   const [viewMode, setViewMode] = useState(loadStoredView); // list（默认，扫描密度）| grid（卡片浏览）
+  // 页面三区 Tab：今日复盘 / 个股清单 / 监控。localStorage 记忆，刷新后回到离开时的区。
+  const [activeTab, setActiveTab] = useState(() => {
+    try { return localStorage.getItem("workbench.review-tab.v1") ?? "review"; } catch { return "review"; }
+  });
   const [activeChain, setActiveChain] = useState(() => {
     try { return localStorage.getItem(CHAIN_TAB_STORAGE_KEY) ?? "all"; } catch { return "all"; }
   }); // "all" | chainLabel，链 Tab 当前分组
@@ -122,6 +126,10 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
   useEffect(() => {
     try { localStorage.setItem(VIEW_STORAGE_KEY, viewMode); } catch { /* 隐私模式等场景静默降级 */ }
   }, [viewMode]);
+
+  useEffect(() => {
+    try { localStorage.setItem("workbench.review-tab.v1", activeTab); } catch { /* 同上 */ }
+  }, [activeTab]);
 
   useEffect(() => {
     try { localStorage.setItem(CHAIN_TAB_STORAGE_KEY, activeChain); } catch { /* 同上 */ }
@@ -355,15 +363,30 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
         aside={headerAside}
       />
 
-      <DailyReviewPanel
-        portfolioSlot={<PortfolioPanel stocks={allStocks} />}
-        stocks={allStocks}
-      />
-
-      <div className="watchlist-section-title" role="heading" aria-level={2}>
-        个股清单
+      <div className="review-tabs" role="tablist" aria-label="复盘分区">
+        {[["review", "今日复盘"], ["list", "个股清单"], ["monitor", "监控"]].map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === key}
+            className={`review-tabs__tab${activeTab === key ? " review-tabs__tab--active" : ""}`}
+            onClick={() => setActiveTab(key)}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
+      {activeTab === "review" ? (
+        <DailyReviewPanel
+          portfolioSlot={<PortfolioPanel stocks={allStocks} />}
+          stocks={allStocks}
+        />
+      ) : null}
+
+      {activeTab === "list" ? (
+        <>
       <div className="watchlist-toolbar">
         <span className="watchlist-source">
           {universe.source === "live" ? "行情已连接" : universe.source === "fallback" ? "降级模式" : "—"}
@@ -563,9 +586,15 @@ export function StockWatchlistPage({ onOpenDocument, syncRevision = 0 }) {
           }}
         />
       ) : null}
+        </>
+      ) : null}
 
-      <AlertsPanel />
-      <WatchdogPanel />
+      {activeTab === "monitor" ? (
+        <>
+          <AlertsPanel />
+          <WatchdogPanel />
+        </>
+      ) : null}
     </div>
   );
 }
