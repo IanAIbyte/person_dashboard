@@ -761,6 +761,13 @@ export function loadReviewSchedule() {
   );
 }
 
+export function loadDailyReviewSentiment() {
+  return withFallback(
+    () => cachedGet("/api/daily-review/sentiment", 60_000),
+    () => null,
+  );
+}
+
 export async function updateReviewSchedule(patch) {
   const result = await request("/api/daily-review/schedule", {
     method: "PUT",

@@ -194,7 +194,13 @@ test("startCoachReview renders four-part markdown from context data", async () =
     llmClient: {
       chatCompletion: async ({ messages }) => {
         capturedPrompt = messages[1].content;
-        return "## 一、大盘与情绪面\n沪指收涨。\n**今日核心**：分化。";
+        return JSON.stringify({
+          core: "指数分化，沪强深弱。",
+          market: { narrative: "沪指收涨。", sentimentStage: "发酵", sentimentNext: "判断：明日分歧加大（中）。" },
+          holdings: [{ name: "沪电股份", action: "持有", logic: "被验证", signal: "缩量回调", support: 112.1, pressure: 121.21, stop: 110, supportBasis: "60日低点", pressureBasis: "前高", trigger: "121.21 放量突破减 1/3", invalid: "跌破 112 清仓", note: "抗跌。" }],
+          watch: [{ name: "长鑫存储", conclusion: "继续观察", distance: "-3.2%", flash: false, note: "随板块。" }],
+          plan: { scenarios: [{ name: "强势", prob: 30, stance: "维持仓位" }], watchPlans: [], risks: ["外盘波动"] },
+        });
       },
     },
   });
@@ -214,14 +220,27 @@ test("startCoachReview renders four-part markdown from context data", async () =
   const task = await waitForTask(service, started.id);
 
   assert.equal(task.status, "completed");
-  assert.equal(task.result.markdown, "## 一、大盘与情绪面\n沪指收涨。\n**今日核心**：分化。");
-  assert.ok(task.result.overview.length > 0);
-  assert.ok(task.result.overview.length <= 120);
+  // JSON 信封透传；overview 取 core。
+  assert.equal(task.result.structured.core, "指数分化，沪强深弱。");
+  assert.equal(task.result.structured.holdings[0].action, "持有");
+  assert.equal(task.result.markdown, undefined);
+  assert.equal(task.result.overview, "指数分化，沪强深弱。");
   // 默认模板 + 数据段 + session 注入。
   assert.ok(capturedPrompt.includes("四段式复盘"));
   assert.ok(capturedPrompt.includes("# 今日真实数据"));
   assert.ok(capturedPrompt.includes("收盘后复盘"));
   assert.ok(capturedPrompt.includes("上涨 [待补充] 家"));
+});
+
+test("startCoachReview falls back to markdown when JSON invalid", async () => {
+  const service = createStockAnalysisService({
+    llmClient: mockLlm("这不是 JSON,是一段普通复盘文字。"),
+  });
+  const started = await service.startCoachReview({ date: "2026-08-26", indices: [], positions: [], watch: [], events: [] });
+  const task = await waitForTask(service, started.id);
+  assert.equal(task.status, "completed");
+  assert.equal(task.result.structured, undefined);
+  assert.equal(task.result.markdown, "这不是 JSON,是一段普通复盘文字。");
 });
 
 test("startCoachReview honors custom prompt template and intraday session", async () => {

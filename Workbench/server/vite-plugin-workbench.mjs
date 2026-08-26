@@ -2191,6 +2191,11 @@ export function workbenchApiPlugin({
             return json(res, 200, { intraday, close });
           }
 
+          if (req.method === "GET" && url.pathname === "/api/daily-review/sentiment") {
+            if (!sentimentService) return json(res, 200, null);
+            return json(res, 200, await sentimentService.getSentiment().catch(() => null));
+          }
+
           if (req.method === "GET" && url.pathname === "/api/daily-review/schedule") {
             return json(res, 200, await reviewSchedule.get());
           }

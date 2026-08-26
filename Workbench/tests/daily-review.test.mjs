@@ -67,6 +67,13 @@ test("daily review store overrides by date and keeps last 30 entries", async () 
     () => store.save("2026-08-26", { review: { overview: "x", markdown: "a".repeat(20_001) } }),
     /长度/,
   );
+  // 结构化复盘（JSON 信封）对象透传。
+  const structured = { core: "分化日", market: { sentimentStage: "发酵" }, holdings: [], watch: [], plan: {} };
+  const saved = await store.save("2026-08-25", {
+    session: "close",
+    review: { overview: "分化日", structured },
+  });
+  assert.deepEqual(saved.review.structured, structured);
 
   const first = await store.save("2026-08-25", { review: { overview: "第一版" } });
   assert.equal(first.review.overview, "第一版");

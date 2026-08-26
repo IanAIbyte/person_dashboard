@@ -111,6 +111,14 @@ function normalizeEntry(value) {
     }
     review.markdown = source.markdown;
   }
+  // 结构化复盘（JSON 信封）：对象透传，序列化长度同上限约束。
+  if (source.structured != null && typeof source.structured === "object") {
+    const serialized = JSON.stringify(source.structured);
+    if (serialized.length > MAX_MARKDOWN_LENGTH) {
+      fail("INVALID_REVIEW_SUMMARY", "结构化复盘超过长度上限。");
+    }
+    review.structured = source.structured;
+  }
   for (const key of ["notable", "risks", "actions"]) {
     const list = normalizeTextList(source[key]);
     if (list) review[key] = list;

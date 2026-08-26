@@ -27,6 +27,7 @@ import {
   loadCoachPrompt,
   loadDailyReviewIndices,
   loadDailyReviewKline,
+  loadDailyReviewSentiment,
   loadDailyReviewSummary,
   loadDailyReviewTimeline,
   loadReviewSchedule,
@@ -277,6 +278,156 @@ function TimelineRow({ item, onRemoved }) {
   );
 }
 
+// ===== 结构化复盘渲染（JSON 信封；markdown 条目走旧渲染降级）=====
+
+const SENTIMENT_STAGES = ["冰点", "回暖", "发酵", "高潮", "分歧", "退潮"];
+const ACTION_TONE = { 持有: "hold", 加仓: "up", 减仓: "down", 清仓: "flat" };
+const LOGIC_TONE = { 被验证: "ok", 中性: "flat", 被破坏: "bad" };
+
+function StatTile({ label, value, tone = "" }) {
+  return (
+    <div className={`coach-tile${tone ? ` coach-tile--${tone}` : ""}`}>
+      <strong>{value ?? "—"}</strong>
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function MarketSection({ market }) {
+  const [sentiment, setSentiment] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    loadDailyReviewSentiment().then((result) => {
+      if (!cancelled) setSentiment(result.data);
+    });
+    return () => { cancelled = true; };
+  }, []);
+  const stageIndex = SENTIMENT_STAGES.indexOf(market?.sentimentStage);
+  return (
+    <section className="coach-section" aria-label="大盘与情绪面">
+      <h4>一、大盘与情绪面</h4>
+      <div className="coach-tiles">
+        <StatTile label="上涨家数" value={sentiment?.upCount} tone="up" />
+        <StatTile label="下跌家数" value={sentiment?.downCount} tone="down" />
+        <StatTile label="涨停" value={sentiment?.limitUp} />
+        <StatTile label="最高连板" value={sentiment?.maxBoards != null ? `${sentiment.maxBoards} 板` : null} />
+        <StatTile label="晋级率" value={sentiment?.promotionRate != null ? `${sentiment.promotionRate}%` : null} />
+        <StatTile label="北证50" value={sentiment?.bj50 ? `${sentiment.bj50.changePct > 0 ? "+" : ""}${sentiment.bj50.changePct}%` : null} tone={sentiment?.bj50?.changePct > 0 ? "up" : "down"} />
+      </div>
+      {stageIndex >= 0 ? (
+        <div className="coach-stages" aria-label="情绪周期">
+          {SENTIMENT_STAGES.map((stage, index) => (
+            <span key={stage} className={`coach-stages__item${index === stageIndex ? " coach-stages__item--on" : ""}`}>
+              {index < stageIndex ? "·" : ""}{stage}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {market?.sentimentNext ? <p className="coach-note coach-note--judge">{market.sentimentNext}</p> : null}
+      {market?.narrative ? <p className="coach-note">{market.narrative}</p> : null}
+    </section>
+  );
+}
+
+function HoldingCard({ holding }) {
+  const action = ACTION_TONE[holding?.action] ?? "flat";
+  const logic = LOGIC_TONE[holding?.logic] ?? "flat";
+  const num = (value) => (typeof value === "number" ? value.toFixed(2) : "—");
+  return (
+    <article className="coach-holding">
+      <header className="coach-holding__head">
+        <strong>{holding?.name}</strong>
+        {holding?.action ? <span className={`coach-badge coach-badge--${action}`}>{holding.action}</span> : null}
+        {holding?.logic ? <span className={`coach-badge coach-badge--${logic}`}>{holding.logic}</span> : null}
+        {holding?.signal ? <span className="coach-holding__signal">{holding.signal}</span> : null}
+      </header>
+      <div className="coach-holding__levels">
+        <span>支撑 <strong>{num(holding?.support)}</strong><em>{holding?.supportBasis}</em></span>
+        <span>压力 <strong>{num(holding?.pressure)}</strong><em>{holding?.pressureBasis}</em></span>
+        <span>止损 <strong>{num(holding?.stop)}</strong></span>
+      </div>
+      {holding?.note ? <p className="coach-note">{holding.note}</p> : null}
+      <div className="coach-holding__conds">
+        {holding?.trigger ? <p><b>触发</b>{holding.trigger}</p> : null}
+        {holding?.invalid ? <p><b>失效</b>{holding.invalid}</p> : null}
+      </div>
+    </article>
+  );
+}
+
+function PlanSection({ plan }) {
+  const scenarios = Array.isArray(plan?.scenarios) ? plan.scenarios : [];
+  const maxProb = Math.max(1, ...scenarios.map((s) => Number(s.prob) || 0));
+  return (
+    <section className="coach-section" aria-label="作战计划">
+      <h4>四、作战计划</h4>
+      {scenarios.length ? (
+        <div className="coach-scenarios">
+          {scenarios.map((scenario) => (
+            <div className="coach-scenario" key={scenario.name}>
+              <div className="coach-scenario__head">
+                <span>{scenario.name}</span>
+                <strong>{Number(scenario.prob) || 0}%</strong>
+              </div>
+              <div className="coach-scenario__bar">
+                <span style={{ width: `${((Number(scenario.prob) || 0) / maxProb) * 100}%` }} />
+              </div>
+              {scenario.stance ? <p>{scenario.stance}</p> : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {Array.isArray(plan?.watchPlans) && plan.watchPlans.length ? (
+        <div className="coach-plans">
+          <h5>关注触发</h5>
+          {plan.watchPlans.map((item) => (
+            <p key={item.name}><b>{item.name}</b>{item.condition}{item.note ? `｜${item.note}` : ""}</p>
+          ))}
+        </div>
+      ) : null}
+      {Array.isArray(plan?.risks) && plan.risks.length ? (
+        <div className="coach-plans coach-plans--risks">
+          <h5>风险清单</h5>
+          <ul>{plan.risks.map((risk) => <li key={risk}>{risk}</li>)}</ul>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function CoachReport({ structured }) {
+  const holdings = Array.isArray(structured?.holdings) ? structured.holdings : [];
+  const watch = Array.isArray(structured?.watch) ? structured.watch : [];
+  return (
+    <div className="coach-report">
+      {structured?.core ? <p className="coach-core">{structured.core}</p> : null}
+      <MarketSection market={structured?.market} />
+      <section className="coach-section" aria-label="持仓诊断">
+        <h4>二、持仓诊断</h4>
+        {holdings.length ? (
+          <div className="coach-holdings">{holdings.map((h) => <HoldingCard holding={h} key={h.name} />)}</div>
+        ) : <p className="coach-note">（空仓）</p>}
+      </section>
+      <section className="coach-section" aria-label="关注跟踪">
+        <h4>三、关注跟踪</h4>
+        {watch.length ? (
+          <ul className="coach-watch">
+            {watch.map((item) => (
+              <li key={item.name} className={item.flash ? "coach-watch__item--flash" : ""}>
+                <b>{item.flash ? "⚡ " : ""}{item.name}</b>
+                {item.conclusion ? <span className="coach-watch__conclusion">{item.conclusion}</span> : null}
+                {item.distance ? <span className="coach-watch__distance">{item.distance}</span> : null}
+                {item.note ? <span className="coach-note">{item.note}</span> : null}
+              </li>
+            ))}
+          </ul>
+        ) : <p className="coach-note">（空）</p>}
+      </section>
+      <PlanSection plan={structured?.plan} />
+    </div>
+  );
+}
+
 function SessionSummaryCard({ title, session, entry, stocks, date, onSaved }) {
   const [task, setTask] = useState(null);
   const [error, setError] = useState(null);
@@ -339,7 +490,9 @@ function SessionSummaryCard({ title, session, entry, stocks, date, onSaved }) {
           <span className="review-summary__meta">
             生成于 {entry.generatedAt ? new Date(entry.generatedAt).toLocaleString("zh-CN") : "—"}
           </span>
-          {review.markdown ? (
+          {review.structured ? (
+            <CoachReport structured={review.structured} />
+          ) : review.markdown ? (
             <div className="review-summary__markdown">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{review.markdown}</ReactMarkdown>
             </div>

@@ -406,6 +406,16 @@ verifications 仅汇总清单中「监控」字段的验证节点，没有则输
         // 四段式长文 + 27 只关注股逐只跟踪，生成时长波动大（实测 190-400s+）。
         timeoutMs: 600_000,
       });
+      // 首选 JSON 信封（前端结构化渲染）；解析失败降级为 markdown 全文。
+      const structured = parseJson(content, null);
+      if (structured && typeof structured === "object" && typeof structured.core === "string") {
+        return {
+          generatedAt: new Date().toISOString(),
+          session: session.key ?? "close",
+          structured,
+          overview: structured.core.slice(0, 120),
+        };
+      }
       const markdown = content.trim();
       return {
         generatedAt: new Date().toISOString(),
