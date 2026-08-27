@@ -1,4 +1,4 @@
-/* 服务管理页 —— 复用 :root 变量与全站圆角体系（输入 8 / 卡片 14）。 */
+/* 服务管理页：单页两段清单行。复用 :root 变量与全站圆角体系（输入 8 / 容器 14）。 */
 
 .services-head-ops {
   display: flex;
@@ -24,82 +24,195 @@
   color: var(--accent);
 }
 
-.services-tabs {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 14px;
-  border-bottom: 1px solid var(--line);
-}
-
-.services-tabs__tab {
-  min-height: 32px;
-  padding: 0 14px;
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: none;
-  color: var(--ink-soft);
-  font-size: 12.5px;
-  cursor: pointer;
-}
-
-.services-tabs__tab--on {
-  border-bottom-color: var(--accent);
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.services-card__tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.services-card__tag {
-  padding: 1px 7px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  color: var(--ink-soft);
-}
-
-.services-card__probed {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  color: var(--ink-soft);
-}
-
-.services-card__note--error { color: var(--danger); }
-
-.services-card__ops button:disabled {
-  opacity: 0.55;
-  cursor: wait;
-}
-
 .services-meta {
   display: flex;
   gap: 18px;
-  margin: 0 0 14px;
+  margin: 0 0 16px;
   font-family: var(--font-mono);
   font-size: 10.5px;
   color: var(--ink-soft);
 }
 
-.services-meta__up { color: var(--ok); }
+.services-section {
+  margin: 18px 0 8px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+/* ---- 行清单 ---- */
+
+.services-rows {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.services-row {
+  display: grid;
+  grid-template-columns: 76px minmax(140px, 1.1fr) minmax(220px, 1.6fr) 130px 130px auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px dashed var(--line);
+  font-size: 12px;
+}
+
+.services-row:last-child { border-bottom: none; }
+.services-row:nth-child(even) { background: var(--paper); }
+
+.services-row--head {
+  padding: 5px 12px;
+  background: var(--surface-sunken);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+}
+
+.services-row--down {
+  border-left: 3px solid var(--danger);
+  background: color-mix(in srgb, var(--danger) 4%, transparent);
+}
+
+.services-row--probing { opacity: 0.6; }
+
+.services-row__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.services-row--up .services-row__status { color: var(--ok); }
+.services-row--down .services-row__status { color: var(--danger); }
+
+.services-row__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--r-pill);
+  background: var(--ink-faint);
+}
+
+.services-row--up .services-row__dot { background: var(--ok); }
+.services-row--down .services-row__dot { background: var(--danger); }
+
+.services-row__name {
+  display: grid;
+  font-weight: 650;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.services-row__name em {
+  font-style: normal;
+  font-weight: 400;
+  font-size: 10.5px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.services-row__addr {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.services-row__addr:hover { text-decoration: underline; }
+
+.services-row__addr--plain { color: var(--ink-soft); }
+
+.services-row__metric {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.services-row__metric i {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+
+.services-row__probed {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+/* 操作列：默认隐身，行悬停/聚焦时浮现（桌面管理页交互）。 */
+.services-row__ops {
+  display: inline-flex;
+  gap: 2px;
+  justify-self: end;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.services-row:hover .services-row__ops,
+.services-row:focus-within .services-row__ops {
+  opacity: 1;
+}
+
+.services-row--head .services-row__ops { opacity: 1; }
+
+.services-row__op {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.services-row__op:hover {
+  background: var(--paper);
+  color: var(--accent);
+}
+
+.services-row__op--danger:hover { color: var(--danger); }
+
+.services-row__op:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+/* ---- 表单 / 骨架 / 空行 ---- */
 
 .services-form {
   display: grid;
+  grid-template-columns: 1fr 1.4fr 1fr auto;
   gap: 8px;
-  margin-bottom: 14px;
-  padding: 12px;
-  border: 1px solid var(--accent-soft);
-  border-radius: var(--r-md);
+  align-items: center;
+  padding: 8px 12px;
   background: var(--surface);
+  border-bottom: 1px dashed var(--line);
 }
 
+.services-rows > .services-form:last-child { border-bottom: none; }
+
 .services-form input {
-  min-height: 32px;
+  min-height: 30px;
   padding: 0 10px;
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
@@ -142,131 +255,36 @@
   color: var(--danger);
 }
 
-.services-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
-}
-
-.services-card {
-  display: grid;
-  gap: 6px;
-  align-content: start;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
+/* 顶部添加态的表单独立成块 */
+section > .services-form {
+  margin-bottom: 10px;
+  border: 1px solid var(--accent-soft);
   border-radius: var(--r-md);
-  background: var(--surface);
+  grid-template-columns: 1fr 1.4fr 1fr auto;
 }
 
-.services-card--down { border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
-
-.services-card__head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.services-card__head strong {
-  flex: 1;
-  font-size: 13px;
-}
-
-.services-card__state {
-  font-size: 10.5px;
-  color: var(--ink-soft);
-}
-
-.services-card__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--r-pill);
-}
-
-.services-card__dot--up { background: var(--ok); }
-.services-card__dot--down { background: var(--danger); }
-.services-card__dot--pending { background: var(--ink-faint); }
-
-.services-card__url {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--accent);
-  text-decoration: none;
-  word-break: break-all;
-}
-
-.services-card__url:hover { text-decoration: underline; }
-
-.services-card__stats {
-  display: flex;
-  gap: 14px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--ink-soft);
-}
-
-.services-card__note {
-  margin: 0;
-  font-size: 11.5px;
-  line-height: 1.5;
-  color: var(--ink-soft);
-}
-
-.services-card__ops {
-  display: flex;
-  gap: 4px;
-  margin-top: 4px;
-  padding-top: 8px;
-  border-top: 1px dashed var(--line);
-}
-
-.services-card__ops a,
-.services-card__ops button {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 26px;
-  padding: 0 9px;
-  border: none;
-  background: none;
-  color: var(--ink-soft);
-  font-size: 11px;
-  text-decoration: none;
-  cursor: pointer;
-  border-radius: var(--r-sm);
-}
-
-.services-card__ops a:hover,
-.services-card__ops button:hover {
-  background: var(--paper);
-  color: var(--accent);
-}
-
-.services-card__remove:hover {
-  color: var(--danger) !important;
-}
-
-.services-skeleton {
-  height: 132px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
+.services-row-skeleton {
+  height: 38px;
+  border-bottom: 1px dashed var(--line);
   background: linear-gradient(100deg, var(--surface-sunken) 40%, #e9e9ec 50%, var(--surface-sunken) 60%);
   background-size: 200% 100%;
   animation: services-shimmer 1.4s ease-in-out infinite;
 }
+
+.services-row-skeleton:last-child { border-bottom: none; }
 
 @keyframes services-shimmer {
   to { background-position: -200% 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .services-skeleton { animation: none; }
+  .services-row-skeleton { animation: none; }
+  .services-row__ops { transition: none; opacity: 1; }
 }
 
-.services-empty {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-  padding: 48px 0;
-  color: var(--ink-soft);
+.services-empty-line {
+  margin: 0;
+  padding: 18px 4px;
   font-size: 12px;
+  color: var(--ink-soft);
 }
