@@ -324,13 +324,9 @@ section > .services-form {
   gap: 10px;
   padding: 14px 16px;
   border: 1px solid var(--line);
-  border-left: 3px solid var(--ok);
   border-radius: var(--r-md);
   background: var(--surface);
 }
-
-.disk-card--warn { border-left-color: var(--warn); }
-.disk-card--danger { border-left-color: var(--danger); }
 
 .disk-card__head {
   display: flex;
