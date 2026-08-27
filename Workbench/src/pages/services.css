@@ -283,6 +283,90 @@ section > .services-form {
   .services-row__ops { transition: none; opacity: 1; }
 }
 
+/* ---- 本机磁盘：堆叠条形图行 ---- */
+
+.disks-list {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.disks-row {
+  display: grid;
+  grid-template-columns: 170px 220px 1fr 56px;
+  gap: 14px;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px dashed var(--line);
+  font-size: 12px;
+}
+
+.disks-row:last-child { border-bottom: none; }
+.disks-row:nth-child(even) { background: var(--paper); }
+
+.disks-row--danger { border-left: 3px solid var(--danger); }
+.disks-row--warn { border-left: 3px solid var(--warn); }
+
+.disks-row__mount {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.disks-row__nums {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.disks-row__nums b { font-size: 12px; font-weight: 650; }
+
+.disks-row__nums i {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+
+/* 堆叠条形图：已用段（阈值色）+ 剩余底轨 */
+.disks-bar {
+  height: 10px;
+  border-radius: var(--r-pill);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.disks-bar__used {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--ok);
+  transition: width 0.4s var(--ease);
+}
+
+.disks-bar__used--warn { background: var(--warn); }
+.disks-bar__used--danger { background: var(--danger); }
+
+.disks-row__pct {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 650;
+  text-align: right;
+}
+
+.disks-row__pct--ok { color: var(--ok); }
+.disks-row__pct--warn { color: var(--warn); }
+.disks-row__pct--danger { color: var(--danger); }
+
+@media (prefers-reduced-motion: reduce) {
+  .disks-bar__used { transition: none; }
+}
+
 .services-empty-line {
   margin: 0;
   padding: 18px 4px;

@@ -14,6 +14,7 @@ import {
 import { PageHeader } from "../components/PageHeader";
 import {
   addService,
+  loadDisks,
   loadServices,
   loadServers,
   openServerTerminal,
@@ -143,11 +144,27 @@ function ServerRow({ item, probing, onProbe, onOpen }) {
   );
 }
 
+function diskTone(usePct) {
+  if (usePct >= 95) return "danger";
+  if (usePct >= 85) return "warn";
+  return "ok";
+}
+
+function DiskBar({ disk }) {
+  const tone = diskTone(disk.usePct);
+  return (
+    <div className="disks-bar" role="img" aria-label={`${disk.mount} 已用 ${disk.usePct}%`}>
+      <span className={`disks-bar__used disks-bar__used--${tone}`} style={{ width: `${Math.min(disk.usePct, 100)}%` }} />
+    </div>
+  );
+}
+
 const ROW_HEADER = ["状态", "名称", "地址", "指标", "上次探测", ""];
 
 export function ServicesPage() {
   const [data, setData] = useState({ items: [], total: 0 });
   const [servers, setServers] = useState({ items: [], total: 0 });
+  const [disks, setDisks] = useState({ items: [], totalGb: 0, usedGb: 0 });
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -159,6 +176,7 @@ export function ServicesPage() {
     await Promise.all([
       loadServices().then((response) => setData(response ?? { items: [], total: 0 })).catch(() => {}),
       loadServers().then((response) => setServers(response ?? { items: [], total: 0 })).catch(() => {}),
+      loadDisks().then((response) => setDisks(response ?? { items: [], totalGb: 0, usedGb: 0 })).catch(() => {}),
     ]);
     setLoading(false);
   };
@@ -300,6 +318,39 @@ export function ServicesPage() {
               />
             ))}
           </div>
+        )}
+      </section>
+
+      <section aria-label="本机磁盘">
+        <h2 className="services-section">本机磁盘</h2>
+        {loading ? (
+          <div className="services-rows" aria-hidden="true">
+            {[0, 1].map((key) => <div className="services-row-skeleton" key={key} />)}
+          </div>
+        ) : (disks.items ?? []).length === 0 ? (
+          <p className="services-empty-line">读取磁盘信息失败。</p>
+        ) : (
+          <>
+            <div className="services-meta">
+              <span>共 {disks.items.length} 个卷</span>
+              <span>总容量 {disks.totalGb} GB</span>
+              <span>已用 {disks.usedGb} GB</span>
+              <span>读取于 {new Date(disks.checkedAt).toLocaleTimeString("zh-CN")}</span>
+            </div>
+            <div className="disks-list">
+              {(disks.items ?? []).map((disk) => (
+                <div className={`disks-row disks-row--${diskTone(disk.usePct)}`} key={disk.mount}>
+                  <span className="disks-row__mount" title={`${disk.filesystem}（含 ${disk.mount}）`}>{disk.mount}</span>
+                  <span className="disks-row__nums">
+                    <b>{disk.usedGb} / {disk.totalGb} GB</b>
+                    <i>可用 {disk.availGb} GB</i>
+                  </span>
+                  <DiskBar disk={disk} />
+                  <span className={`disks-row__pct disks-row__pct--${diskTone(disk.usePct)}`}>{disk.usePct}%</span>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </section>
     </div>

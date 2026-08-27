@@ -66,6 +66,7 @@ import { createSentimentDataService } from "./sentiment-data.mjs";
 import { createPromptsLibrary } from "./prompts-library.mjs";
 import { checkService, createServicesStore } from "./services-store.mjs";
 import { createServersRegistry, openItermSsh, probeServer } from "./servers-registry.mjs";
+import { createDisksMonitor } from "./disks.mjs";
 import { createCoachPromptRepository, COACH_PROMPT_PATH } from "./coach-prompt.mjs";
 import { createReviewScheduleRepository, REVIEW_SCHEDULE_PATH } from "./review-schedule.mjs";
 import {
@@ -916,6 +917,7 @@ export function workbenchApiPlugin({
   const promptsLibrary = createPromptsLibrary({ llmClient });
   const servicesStore = createServicesStore({ vaultRoot });
   const serversRegistry = createServersRegistry();
+  const disksMonitor = createDisksMonitor();
   // 健康探测低频策略：自动探测 1 天一次（缓存 24h），页面展示上次探测时间，
   // 手动按钮经 force 接口即时重测，避免给目标服务压力。
   const PROBE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -1887,6 +1889,14 @@ export function workbenchApiPlugin({
 
           if (req.method === "GET" && url.pathname === "/api/servers") {
             return json(res, 200, await serversWithStatus());
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/system/disks") {
+            try {
+              return json(res, 200, await disksMonitor.list());
+            } catch (error) {
+              return json(res, 502, { error: { code: "DISK_FAILED", message: error?.message ?? "读取磁盘信息失败" } });
+            }
           }
 
           if (req.method === "POST" && url.pathname === "/api/servers/probe") {

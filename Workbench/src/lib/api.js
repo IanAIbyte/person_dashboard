@@ -829,6 +829,10 @@ export function openServerTerminal(host) {
   return request("/api/servers/open", { method: "POST", body: JSON.stringify({ host }) });
 }
 
+export function loadDisks() {
+  return cachedGet("/api/system/disks", 60_000);
+}
+
 export async function updateReviewSchedule(patch) {
   const result = await request("/api/daily-review/schedule", {
     method: "PUT",
