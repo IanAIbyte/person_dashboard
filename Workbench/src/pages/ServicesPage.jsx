@@ -161,17 +161,17 @@ function humanSize(kb) {
   return `${kb} KB`;
 }
 
-// 卷的目录分析：展开即启动（手动触发），du 流式可边跑边看，完成即停轮询。
-// 呈现：DaisyDisk 式动态环形图（单环多段 + 图例联动 hover 高亮扇区）。
+// 卷卡：目录分析自动启动（du 流式），形态 = 单环多段动态环形图 + 右侧圆点图例。
 const DIR_SLICE_LIMIT = 10;
 const DIR_COLORS = Array.from({ length: DIR_SLICE_LIMIT + 1 }, (_, index, total = DIR_SLICE_LIMIT + 1) => {
   const alpha = 0.85 - (index / total) * 0.6; // 紫 → 浅紫透明度阶梯
   return `rgba(124, 58, 237, ${alpha.toFixed(2)})`;
 });
 
-function DiskDirPanel({ mount }) {
+function DiskCard({ disk }) {
   const [state, setState] = useState(null);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const mount = disk.mount;
 
   useEffect(() => {
     let stopped = false;
@@ -194,108 +194,81 @@ function DiskDirPanel({ mount }) {
     };
   }, [mount]);
 
-  if (!state) return <p className="disks-dirs__hint">分析已启动…</p>;
-  if (state.status === "failed") return <p className="disks-dirs__hint disks-dirs__hint--error">{state.error ?? "分析失败"}</p>;
-
-  const items = state.items ?? [];
+  const items = state?.items ?? [];
   const top = items.slice(0, DIR_SLICE_LIMIT);
   const restKb = items.slice(DIR_SLICE_LIMIT).reduce((sum, item) => sum + item.kb, 0);
   const rest = restKb > 0 ? [{ name: "其他", kb: restKb }] : [];
   const slices = [...top, ...rest];
   const totalKb = items.reduce((sum, item) => sum + item.kb, 0) || 1;
-
-  return (
-    <div className="disks-dirs">
-      <p className="disks-dirs__hint">
-        {state.status === "running"
-          ? `分析中…已发现 ${items.length} 个目录（du 全量遍历，大卷需数分钟）`
-          : `共 ${items.length} 个一级目录 · 合计 ${humanSize(totalKb)} · 分析于 ${new Date(state.finishedAt).toLocaleTimeString("zh-CN")}`}
-      </p>
-      <div className="disks-dirs__viz">
-        <div className="disks-dirs__chart">
-          <ResponsiveContainer height="100%" width="100%">
-            <PieChart>
-              <Pie
-                activeIndex={activeIndex >= 0 ? activeIndex : undefined}
-                activeShape={(props) => <g><path {...props} fill={props.fill} opacity={0.55} /></g>}
-                data={slices}
-                dataKey="kb"
-                nameKey="name"
-                innerRadius="58%"
-                outerRadius="92%"
-                paddingAngle={1.5}
-                startAngle={90}
-                endAngle={-270}
-                stroke="var(--paper)"
-                strokeWidth={1}
-                animationDuration={700}
-              >
-                {slices.map((slice, index) => (
-                  <Cell fill={DIR_COLORS[Math.min(index, DIR_COLORS.length - 1)]} key={slice.name} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
-          <span className="disks-dirs__total">
-            <b>{humanSize(totalKb)}</b>
-            <i>{slices.length} 项</i>
-          </span>
-        </div>
-        <div className="disks-dirs__legend">
-          {slices.map((slice, index) => (
-            <button
-              className={`disks-dirs__item${activeIndex === index ? " disks-dirs__item--on" : ""}`}
-              key={slice.name}
-              onBlur={() => setActiveIndex(-1)}
-              onClick={(event) => event.currentTarget.focus()}
-              onFocus={() => setActiveIndex(index)}
-              onMouseEnter={() => setActiveIndex(index)}
-              onMouseLeave={() => setActiveIndex(-1)}
-              type="button"
-            >
-              <span className="disks-dirs__swatch" style={{ background: DIR_COLORS[Math.min(index, DIR_COLORS.length - 1)] }} />
-              <span className="disks-dirs__name" title={`${mount === "/" ? "" : mount}/${slice.name}`}>{slice.name}</span>
-              <span className="disks-dirs__size">{humanSize(slice.kb)}</span>
-              <span className="disks-dirs__pct">{Math.round((slice.kb / totalKb) * 100)}%</span>
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// 卷用量环形图：donut 两段（已用阈值色 + 剩余浅色），中心百分比。
-const TONE_VAR = { ok: "var(--ok)", warn: "var(--warn)", danger: "var(--danger)" };
-
-function DiskDonut({ disk }) {
   const tone = diskTone(disk.usePct);
-  const data = [
-    { name: "已用", value: Math.max(disk.usePct, 0.5) },
-    { name: "剩余", value: Math.max(100 - disk.usePct, 0.5) },
-  ];
+
   return (
-    <div className="disks-donut" role="img" aria-label={`${disk.mount} 已用 ${disk.usePct}%`}>
-      <ResponsiveContainer height={62} width={62}>
-        <PieChart>
-          <Pie
-            data={data}
-            dataKey="value"
-            innerRadius="70%"
-            outerRadius="96%"
-            paddingAngle={2}
-            startAngle={90}
-            endAngle={-270}
-            stroke="none"
-            isAnimationActive={false}
-          >
-            <Cell fill={TONE_VAR[tone]} />
-            <Cell fill="var(--surface-sunken)" />
-          </Pie>
-        </PieChart>
-      </ResponsiveContainer>
-      <span className={`disks-donut__pct disks-donut__pct--${tone}`}>{disk.usePct}%</span>
-    </div>
+    <article className={`disk-card disk-card--${tone}`}>
+      <header className="disk-card__head">
+        <div className="disk-card__title">
+          <b title={disk.filesystem}>{disk.mount}</b>
+          <i>{disk.usedGb} / {disk.totalGb} GB · 可用 {disk.availGb} GB</i>
+        </div>
+        <span className={`disk-card__pct disk-card__pct--${tone}`}>{disk.usePct}%</span>
+      </header>
+      {state?.status === "failed" ? (
+        <p className="disk-card__hint disk-card__hint--error">{state.error ?? "分析失败"}</p>
+      ) : (
+        <div className="disk-card__viz">
+          <div className="disk-card__chart">
+            <ResponsiveContainer height="100%" width="100%">
+              <PieChart>
+                <Pie
+                  activeIndex={activeIndex >= 0 ? activeIndex : undefined}
+                  activeShape={(props) => <g><path {...props} fill={props.fill} opacity={0.55} /></g>}
+                  data={slices}
+                  dataKey="kb"
+                  nameKey="name"
+                  innerRadius="62%"
+                  outerRadius="94%"
+                  paddingAngle={2}
+                  startAngle={90}
+                  endAngle={-270}
+                  stroke="var(--paper)"
+                  strokeWidth={1}
+                  animationDuration={700}
+                >
+                  {slices.map((slice, index) => (
+                    <Cell fill={DIR_COLORS[Math.min(index, DIR_COLORS.length - 1)]} key={slice.name} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+            <span className="disk-card__center">
+              <b>{humanSize(totalKb)}</b>
+              <i>{state?.status === "running" ? "分析中" : `${slices.length} 项`}</i>
+            </span>
+          </div>
+          <ul className="disk-card__legend">
+            {state == null || state.status === "running" ? (
+              <li className="disk-card__hint">
+                {state == null ? "分析已启动…" : `已发现 ${items.length} 个目录（大卷需数分钟）`}
+              </li>
+            ) : slices.map((slice, index) => (
+              <li
+                className={`disk-card__item${activeIndex === index ? " disk-card__item--on" : ""}`}
+                key={slice.name}
+                onMouseEnter={() => setActiveIndex(index)}
+                onMouseLeave={() => setActiveIndex(-1)}
+              >
+                <span className="disk-card__swatch" style={{ background: DIR_COLORS[Math.min(index, DIR_COLORS.length - 1)] }} />
+                <span className="disk-card__name" title={`${mount === "/" ? "" : mount}/${slice.name}`}>{slice.name}</span>
+                <span className="disk-card__size">{humanSize(slice.kb)}</span>
+                <span className="disk-card__pct2">{Math.round((slice.kb / totalKb) * 100)}%</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {state?.status === "done" ? (
+        <p className="disk-card__foot">分析于 {new Date(state.finishedAt).toLocaleTimeString("zh-CN")}</p>
+      ) : null}
+    </article>
   );
 }
 
@@ -312,8 +285,6 @@ export function ServicesPage() {
   const [formError, setFormError] = useState(null);
   const [probingKey, setProbingKey] = useState(null);
   const [disksRefreshing, setDisksRefreshing] = useState(false);
-  // 默认全部展开（自动启动目录分析）；点击卷行可收起/再展开。
-  const [collapsedMounts, setCollapsedMounts] = useState(() => new Set());
 
   const refresh = async () => {
     await Promise.all([
@@ -508,34 +479,10 @@ export function ServicesPage() {
               <span>已用 {disks.usedGb} GB</span>
               <span>读取于 {new Date(disks.checkedAt).toLocaleTimeString("zh-CN")}</span>
             </div>
-            <div className="disks-list">
-              {(disks.items ?? []).map((disk) => {
-                const expanded = !collapsedMounts.has(disk.mount);
-                const toggle = () => setCollapsedMounts((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(disk.mount)) next.delete(disk.mount);
-                  else next.add(disk.mount);
-                  return next;
-                });
-                return (
-                  <div className={`disks-rowwrap${expanded ? " disks-rowwrap--open" : ""}`} key={disk.mount}>
-                    <div
-                      className={`disks-row disks-row--${diskTone(disk.usePct)}`}
-                      onClick={toggle}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") toggle(); }}
-                    >
-                      <DiskDonut disk={disk} />
-                      <span className="disks-row__info">
-                        <b className="disks-row__mount" title={`${disk.filesystem}（含 ${disk.mount}）`}>{disk.mount}</b>
-                        <i className="disks-row__nums">{disk.usedGb} / {disk.totalGb} GB · 可用 {disk.availGb} GB</i>
-                      </span>
-                    </div>
-                    {expanded ? <DiskDirPanel key={`${disk.mount}-${disksEpoch}`} mount={disk.mount} /> : null}
-                  </div>
-                );
-              })}
+            <div className="disks-cards">
+              {(disks.items ?? []).map((disk) => (
+                <DiskCard disk={disk} key={`${disk.mount}-${disksEpoch}`} />
+              ))}
             </div>
           </>
         )}
