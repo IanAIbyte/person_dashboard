@@ -813,6 +813,22 @@ export function removeService(id) {
   return request(`/api/services/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
+export function probeService(id) {
+  return request("/api/services/probe", { method: "POST", body: JSON.stringify({ id }), timeout: 20_000 });
+}
+
+export function loadServers() {
+  return cachedGet("/api/servers", 5 * 60_000);
+}
+
+export function probeServerByHost(host) {
+  return request("/api/servers/probe", { method: "POST", body: JSON.stringify({ host }), timeout: 20_000 });
+}
+
+export function openServerTerminal(host) {
+  return request("/api/servers/open", { method: "POST", body: JSON.stringify({ host }) });
+}
+
 export async function updateReviewSchedule(patch) {
   const result = await request("/api/daily-review/schedule", {
     method: "PUT",

@@ -65,6 +65,7 @@ import { createPortfolioRepository, PORTFOLIO_PATH } from "./portfolio.mjs";
 import { createSentimentDataService } from "./sentiment-data.mjs";
 import { createPromptsLibrary } from "./prompts-library.mjs";
 import { checkService, createServicesStore } from "./services-store.mjs";
+import { createServersRegistry, openItermSsh, probeServer } from "./servers-registry.mjs";
 import { createCoachPromptRepository, COACH_PROMPT_PATH } from "./coach-prompt.mjs";
 import { createReviewScheduleRepository, REVIEW_SCHEDULE_PATH } from "./review-schedule.mjs";
 import {
@@ -914,12 +915,23 @@ export function workbenchApiPlugin({
   const sentimentService = createSentimentDataService();
   const promptsLibrary = createPromptsLibrary({ llmClient });
   const servicesStore = createServicesStore({ vaultRoot });
-  // 健康探测结果内存缓存（60s），避免列表每次渲染都打目标服务。
-  const servicesStatusCache = new Map(); // id -> { status, checkedAt }
+  const serversRegistry = createServersRegistry();
+  // 健康探测低频策略：自动探测 1 天一次（缓存 24h），页面展示上次探测时间，
+  // 手动按钮经 force 接口即时重测，避免给目标服务压力。
+  const PROBE_TTL_MS = 24 * 60 * 60 * 1000;
+  const servicesStatusCache = new Map(); // id -> { url, checkedAt, status }
+  async function probeServiceById(id) {
+    const state = await servicesStore.list();
+    const item = state.items.find((entry) => entry.id === id);
+    if (!item) return null;
+    const status = await checkService(item.url);
+    servicesStatusCache.set(id, { url: item.url, checkedAt: new Date().toISOString(), status });
+    return status;
+  }
   async function servicesWithStatus() {
     const state = await servicesStore.list();
     const now = Date.now();
-    const expired = (meta) => now - new Date(meta.checkedAt).getTime() > 60_000;
+    const expired = (meta) => now - new Date(meta.checkedAt).getTime() > PROBE_TTL_MS;
     await Promise.all(state.items.map(async (item) => {
       const cached = servicesStatusCache.get(item.id);
       if (!cached || expired(cached) || cached.url !== item.url) {
@@ -942,7 +954,44 @@ export function workbenchApiPlugin({
         url: item.url,
         note: item.note,
         status: servicesStatusCache.get(item.id)?.status ?? null,
+        probedAt: servicesStatusCache.get(item.id)?.checkedAt ?? null,
       })),
+    };
+  }
+  // 服务器探测缓存：host -> { key, checkedAt, status }
+  const serversStatusCache = new Map();
+  async function serversWithStatus() {
+    const items = await serversRegistry.list();
+    const now = Date.now();
+    await Promise.all(items.map(async (item) => {
+      const target = item.hostName ?? item.host;
+      const cached = serversStatusCache.get(item.host);
+      const stale = !cached
+        || now - new Date(cached.checkedAt).getTime() > PROBE_TTL_MS
+        || cached.key !== `${target}:${item.port ?? 22}`;
+      if (stale) {
+        serversStatusCache.set(item.host, {
+          key: `${target}:${item.port ?? 22}`,
+          checkedAt: new Date().toISOString(),
+          status: await probeServer({ hostName: target, port: Number(item.port) || 22 }),
+        });
+      }
+    }));
+    return {
+      total: items.length,
+      items: items.map((item) => {
+        const cached = serversStatusCache.get(item.host);
+        return {
+          host: item.host,
+          hostName: item.hostName,
+          user: item.user,
+          port: item.port,
+          source: item.source,
+          profiles: item.profiles,
+          status: cached?.status ?? null,
+          probedAt: cached?.checkedAt ?? null,
+        };
+      }),
     };
   }
   const coachPrompt = createCoachPromptRepository({ vaultRoot });
@@ -1827,6 +1876,41 @@ export function workbenchApiPlugin({
 
           if (req.method === "GET" && url.pathname === "/api/services") {
             return json(res, 200, await servicesWithStatus());
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/services/probe") {
+            const body = await readJson(req, 1_000).catch(() => null);
+            const status = await probeServiceById(String(body?.id ?? ""));
+            if (!status) return json(res, 404, { error: { code: "NOT_FOUND", message: "服务不存在" } });
+            return json(res, 200, { status, probedAt: new Date().toISOString() });
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/servers") {
+            return json(res, 200, await serversWithStatus());
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/servers/probe") {
+            const body = await readJson(req, 1_000).catch(() => null);
+            const host = String(body?.host ?? "");
+            const items = await serversRegistry.list();
+            const item = items.find((entry) => entry.host === host);
+            if (!item) return json(res, 404, { error: { code: "NOT_FOUND", message: "主机不在 ssh 配置中" } });
+            const status = await probeServer({ hostName: item.hostName ?? item.host, port: Number(item.port) || 22 });
+            serversStatusCache.set(host, {
+              key: `${item.hostName ?? item.host}:${item.port ?? 22}`,
+              checkedAt: new Date().toISOString(),
+              status,
+            });
+            return json(res, 200, { status, probedAt: new Date().toISOString() });
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/servers/open") {
+            const body = await readJson(req, 1_000).catch(() => null);
+            try {
+              return json(res, 200, await openItermSsh(String(body?.host ?? "")));
+            } catch (error) {
+              return json(res, 400, { error: { code: "OPEN_FAILED", message: error?.message ?? "打开失败" } });
+            }
           }
 
           if (req.method === "POST" && url.pathname === "/api/services") {
