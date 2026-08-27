@@ -50,7 +50,8 @@
 
 .services-row {
   display: grid;
-  grid-template-columns: 76px minmax(140px, 1.1fr) minmax(220px, 1.6fr) 130px 130px auto;
+  /* 末列固定宽：各行是独立 grid 实例，auto 会各行各算导致表头与数据错位 */
+  grid-template-columns: 76px minmax(140px, 1.1fr) minmax(220px, 1.6fr) 130px 130px 120px;
   gap: 10px;
   align-items: center;
   padding: 8px 12px;
