@@ -1899,6 +1899,14 @@ export function workbenchApiPlugin({
             }
           }
 
+          if (req.method === "POST" && url.pathname === "/api/system/disks/refresh") {
+            try {
+              return json(res, 200, await disksMonitor.refresh());
+            } catch (error) {
+              return json(res, 502, { error: { code: "DISK_FAILED", message: error?.message ?? "读取磁盘信息失败" } });
+            }
+          }
+
           if (req.method === "POST" && url.pathname === "/api/system/disks/dirs") {
             const body = await readJson(req, 500).catch(() => null);
             const mount = String(body?.mount ?? "");

@@ -79,13 +79,21 @@ export function parseDuOutput(text, mount) {
 }
 
 export function createDisksMonitor({ execImpl = execFileAsync } = {}) {
+  // 用量列表缓存：页面刷新零重查，手动刷新（refresh）强制重跑。
+  let listCache = null; // { result, at }
+  const LIST_TTL_MS = 10 * 60 * 1000;
   // 目录分析任务：du -x -d 1 -k 流式输出，运行中即可返回已完成部分。
   const dirAnalyses = new Map(); // mount -> { status, startedAt, finishedAt, items, error }
+  const DIR_TTL_MS = 60 * 60 * 1000;
 
   function startDirAnalysis(mount, knownMounts) {
     if (!knownMounts.includes(mount)) throw new Error("未知挂载点");
     const running = dirAnalyses.get(mount);
     if (running?.status === "running") return running;
+    // 已完成且未过期：直接复用，避免每次进页都重新 du。
+    if (running?.status === "done" && Date.now() - new Date(running.finishedAt).getTime() < DIR_TTL_MS) {
+      return running;
+    }
     const entry = { status: "running", startedAt: new Date().toISOString(), finishedAt: null, items: [], error: null };
     dirAnalyses.set(mount, entry);
     // 手动 spawn 以便流式读取进度；-x 不跨文件系统，-d 1 只取一级目录。
@@ -105,7 +113,10 @@ export function createDisksMonitor({ execImpl = execFileAsync } = {}) {
   }
 
   return {
-    async list() {
+    async list({ force = false } = {}) {
+      if (!force && listCache && Date.now() - listCache.at < LIST_TTL_MS) {
+        return listCache.result;
+      }
       const { stdout } = await execImpl("df", ["-k", "-P"]);
       const gb = (kb) => Math.round((kb / KB / KB) * 10) / 10; // KB → GB 是 ÷1024²
       const parsed = parseDfOutput(stdout);
@@ -117,12 +128,21 @@ export function createDisksMonitor({ execImpl = execFileAsync } = {}) {
         availGb: gb(disk.availKb),
         usePct: Math.round((disk.usedKb / disk.totalKb) * 100),
       }));
-      return {
+      const result = {
         checkedAt: new Date().toISOString(),
         totalGb: gb(parsed.reduce((sum, disk) => sum + disk.totalKb, 0)),
         usedGb: gb(parsed.reduce((sum, disk) => sum + disk.usedKb, 0)),
         items,
       };
+      listCache = { result, at: Date.now() };
+      return result;
+    },
+    // 手动刷新：强制重跑 df，并使目录分析缓存过期（面板重新拉取时重分析）。
+    async refresh() {
+      for (const [mount, entry] of [...dirAnalyses]) {
+        if (entry.status !== "running") dirAnalyses.delete(mount);
+      }
+      return this.list({ force: true });
     },
     startDirAnalysis,
     getDirAnalysis(mount) {

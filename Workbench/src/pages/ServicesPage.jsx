@@ -11,6 +11,7 @@ import {
   IconTrash,
   IconTerminal2,
 } from "@tabler/icons-react";
+import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import { PageHeader } from "../components/PageHeader";
 import {
   addService,
@@ -21,6 +22,7 @@ import {
   openServerTerminal,
   probeServerByHost,
   probeService,
+  refreshDisks,
   removeService,
   startDiskDirAnalysis,
   updateService,
@@ -210,11 +212,36 @@ function DiskDirPanel({ mount }) {
   );
 }
 
-function DiskBar({ disk }) {
+// 卷用量环形图：donut 两段（已用阈值色 + 剩余浅色），中心百分比。
+const TONE_VAR = { ok: "var(--ok)", warn: "var(--warn)", danger: "var(--danger)" };
+
+function DiskDonut({ disk }) {
   const tone = diskTone(disk.usePct);
+  const data = [
+    { name: "已用", value: Math.max(disk.usePct, 0.5) },
+    { name: "剩余", value: Math.max(100 - disk.usePct, 0.5) },
+  ];
   return (
-    <div className="disks-bar" role="img" aria-label={`${disk.mount} 已用 ${disk.usePct}%`}>
-      <span className={`disks-bar__used disks-bar__used--${tone}`} style={{ width: `${Math.min(disk.usePct, 100)}%` }} />
+    <div className="disks-donut" role="img" aria-label={`${disk.mount} 已用 ${disk.usePct}%`}>
+      <ResponsiveContainer height={62} width={62}>
+        <PieChart>
+          <Pie
+            data={data}
+            dataKey="value"
+            innerRadius="70%"
+            outerRadius="96%"
+            paddingAngle={2}
+            startAngle={90}
+            endAngle={-270}
+            stroke="none"
+            isAnimationActive={false}
+          >
+            <Cell fill={TONE_VAR[tone]} />
+            <Cell fill="var(--surface-sunken)" />
+          </Pie>
+        </PieChart>
+      </ResponsiveContainer>
+      <span className={`disks-donut__pct disks-donut__pct--${tone}`}>{disk.usePct}%</span>
     </div>
   );
 }
@@ -294,13 +321,15 @@ export function ServicesPage() {
     await openServerTerminal(item.host).catch(() => {});
   };
 
-  // 磁盘为纯手动刷新：仅按钮触发，不做定时/缓存。
-  const refreshDisks = async () => {
+  // 磁盘手动刷新：强制重跑 df 并重置目录面板（remount 重新分析）。
+  const [disksEpoch, setDisksEpoch] = useState(0);
+  const handleDisksRefresh = async () => {
     if (disksRefreshing) return;
     setDisksRefreshing(true);
     try {
-      const response = await loadDisks();
+      const response = await refreshDisks();
       setDisks(response ?? { items: [], totalGb: 0, usedGb: 0 });
+      setDisksEpoch((epoch) => epoch + 1);
     } catch { /* 失败保留旧数据 */ }
     finally { setDisksRefreshing(false); }
   };
@@ -405,7 +434,7 @@ export function ServicesPage() {
           <button
             className="services-section__refresh"
             disabled={disksRefreshing}
-            onClick={() => void refreshDisks()}
+            onClick={() => void handleDisksRefresh()}
             type="button"
           >
             <IconRefresh aria-hidden="true" size={13} stroke={1.7} />
@@ -444,15 +473,13 @@ export function ServicesPage() {
                       tabIndex={0}
                       onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") toggle(); }}
                     >
-                      <span className="disks-row__mount" title={`${disk.filesystem}（含 ${disk.mount}）`}>{disk.mount}</span>
-                      <span className="disks-row__nums">
-                        <b>{disk.usedGb} / {disk.totalGb} GB</b>
-                        <i>可用 {disk.availGb} GB</i>
+                      <DiskDonut disk={disk} />
+                      <span className="disks-row__info">
+                        <b className="disks-row__mount" title={`${disk.filesystem}（含 ${disk.mount}）`}>{disk.mount}</b>
+                        <i className="disks-row__nums">{disk.usedGb} / {disk.totalGb} GB · 可用 {disk.availGb} GB</i>
                       </span>
-                      <DiskBar disk={disk} />
-                      <span className={`disks-row__pct disks-row__pct--${diskTone(disk.usePct)}`}>{disk.usePct}%</span>
                     </div>
-                    {expanded ? <DiskDirPanel mount={disk.mount} /> : null}
+                    {expanded ? <DiskDirPanel key={`${disk.mount}-${disksEpoch}`} mount={disk.mount} /> : null}
                   </div>
                 );
               })}

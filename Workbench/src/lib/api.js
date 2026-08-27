@@ -829,9 +829,14 @@ export function openServerTerminal(host) {
   return request("/api/servers/open", { method: "POST", body: JSON.stringify({ host }) });
 }
 
-// 磁盘使用情况：纯手动刷新（无缓存），由页面按钮触发。
+// 磁盘使用情况：服务端缓存 10 分钟（页面刷新零重查），手动刷新走 refresh。
 export function loadDisks() {
-  return request("/api/system/disks");
+  return cachedGet("/api/system/disks", 5 * 60_000);
+}
+
+export function refreshDisks() {
+  invalidateCache("/api/system/disks");
+  return request("/api/system/disks/refresh", { method: "POST" });
 }
 
 // 一级目录大小分析：POST 启动（du 流式），GET 轮询进度/结果。

@@ -330,7 +330,7 @@ section > .services-form {
 
 .disks-row {
   display: grid;
-  grid-template-columns: 170px 220px 1fr 56px;
+  grid-template-columns: 62px 1fr;
   gap: 14px;
   align-items: center;
   padding: 10px 14px;
@@ -406,63 +406,45 @@ section > .services-form {
   white-space: nowrap;
 }
 
+/* 环形图 + 中心百分比（卷用量主图） */
+.disks-donut { position: relative; }
+
+.disks-donut__pct {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 650;
+  pointer-events: none;
+}
+
+.disks-donut__pct--ok { color: var(--ink-soft); }
+.disks-donut__pct--warn { color: var(--warn); }
+.disks-donut__pct--danger { color: var(--danger); }
+
+.disks-row__info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
 .disks-row__mount {
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
+  font-weight: 650;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .disks-row__nums {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 10px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.disks-row__nums b { font-size: 12px; font-weight: 650; }
-
-.disks-row__nums i {
   font-style: normal;
-  font-size: 10px;
-  color: var(--ink-soft);
-}
-
-/* 堆叠条形图：已用段（阈值色）+ 剩余底轨 */
-.disks-bar {
-  height: 10px;
-  border-radius: var(--r-pill);
-  background: var(--surface-sunken);
-  overflow: hidden;
-}
-
-.disks-bar__used {
-  display: block;
-  height: 100%;
-  border-radius: var(--r-pill);
-  background: var(--ok);
-  transition: width 0.4s var(--ease);
-}
-
-.disks-bar__used--warn { background: var(--warn); }
-.disks-bar__used--danger { background: var(--danger); }
-
-.disks-row__pct {
   font-family: var(--font-mono);
-  font-size: 11.5px;
-  font-weight: 650;
-  text-align: right;
-}
-
-.disks-row__pct--ok { color: var(--ok); }
-.disks-row__pct--warn { color: var(--warn); }
-.disks-row__pct--danger { color: var(--danger); }
-
-@media (prefers-reduced-motion: reduce) {
-  .disks-bar__used { transition: none; }
+  font-size: 10.5px;
+  color: var(--ink-soft);
+  white-space: nowrap;
 }
 
 .services-empty-line {
