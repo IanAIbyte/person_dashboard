@@ -162,8 +162,16 @@ function humanSize(kb) {
 }
 
 // 卷的目录分析：展开即启动（手动触发），du 流式可边跑边看，完成即停轮询。
+// 呈现：DaisyDisk 式动态环形图（单环多段 + 图例联动 hover 高亮扇区）。
+const DIR_SLICE_LIMIT = 10;
+const DIR_COLORS = Array.from({ length: DIR_SLICE_LIMIT + 1 }, (_, index, total = DIR_SLICE_LIMIT + 1) => {
+  const alpha = 0.85 - (index / total) * 0.6; // 紫 → 浅紫透明度阶梯
+  return `rgba(124, 58, 237, ${alpha.toFixed(2)})`;
+});
+
 function DiskDirPanel({ mount }) {
   const [state, setState] = useState(null);
+  const [activeIndex, setActiveIndex] = useState(-1);
 
   useEffect(() => {
     let stopped = false;
@@ -189,24 +197,69 @@ function DiskDirPanel({ mount }) {
   if (!state) return <p className="disks-dirs__hint">分析已启动…</p>;
   if (state.status === "failed") return <p className="disks-dirs__hint disks-dirs__hint--error">{state.error ?? "分析失败"}</p>;
 
-  const maxKb = state.items?.[0]?.kb ?? 1;
+  const items = state.items ?? [];
+  const top = items.slice(0, DIR_SLICE_LIMIT);
+  const restKb = items.slice(DIR_SLICE_LIMIT).reduce((sum, item) => sum + item.kb, 0);
+  const rest = restKb > 0 ? [{ name: "其他", kb: restKb }] : [];
+  const slices = [...top, ...rest];
+  const totalKb = items.reduce((sum, item) => sum + item.kb, 0) || 1;
+
   return (
     <div className="disks-dirs">
       <p className="disks-dirs__hint">
         {state.status === "running"
-          ? `分析中…已发现 ${state.items.length} 个目录（du 全量遍历，大卷需数分钟）`
-          : `共 ${state.items.length} 个一级目录 · 分析于 ${new Date(state.finishedAt).toLocaleTimeString("zh-CN")}`}
+          ? `分析中…已发现 ${items.length} 个目录（du 全量遍历，大卷需数分钟）`
+          : `共 ${items.length} 个一级目录 · 合计 ${humanSize(totalKb)} · 分析于 ${new Date(state.finishedAt).toLocaleTimeString("zh-CN")}`}
       </p>
-      <div className="disks-dirs__list">
-        {(state.items ?? []).map((item) => (
-          <div className="disks-dirs__row" key={item.name}>
-            <span className="disks-dirs__name" title={`${mount === "/" ? "" : mount}/${item.name}`}>{item.name}</span>
-            <div className="disks-dirs__bar">
-              <span style={{ width: `${Math.max((item.kb / maxKb) * 100, 1)}%` }} />
-            </div>
-            <span className="disks-dirs__size">{humanSize(item.kb)}</span>
-          </div>
-        ))}
+      <div className="disks-dirs__viz">
+        <div className="disks-dirs__chart">
+          <ResponsiveContainer height="100%" width="100%">
+            <PieChart>
+              <Pie
+                activeIndex={activeIndex >= 0 ? activeIndex : undefined}
+                activeShape={(props) => <g><path {...props} fill={props.fill} opacity={0.55} /></g>}
+                data={slices}
+                dataKey="kb"
+                nameKey="name"
+                innerRadius="58%"
+                outerRadius="92%"
+                paddingAngle={1.5}
+                startAngle={90}
+                endAngle={-270}
+                stroke="var(--paper)"
+                strokeWidth={1}
+                animationDuration={700}
+              >
+                {slices.map((slice, index) => (
+                  <Cell fill={DIR_COLORS[Math.min(index, DIR_COLORS.length - 1)]} key={slice.name} />
+                ))}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+          <span className="disks-dirs__total">
+            <b>{humanSize(totalKb)}</b>
+            <i>{slices.length} 项</i>
+          </span>
+        </div>
+        <div className="disks-dirs__legend">
+          {slices.map((slice, index) => (
+            <button
+              className={`disks-dirs__item${activeIndex === index ? " disks-dirs__item--on" : ""}`}
+              key={slice.name}
+              onBlur={() => setActiveIndex(-1)}
+              onClick={(event) => event.currentTarget.focus()}
+              onFocus={() => setActiveIndex(index)}
+              onMouseEnter={() => setActiveIndex(index)}
+              onMouseLeave={() => setActiveIndex(-1)}
+              type="button"
+            >
+              <span className="disks-dirs__swatch" style={{ background: DIR_COLORS[Math.min(index, DIR_COLORS.length - 1)] }} />
+              <span className="disks-dirs__name" title={`${mount === "/" ? "" : mount}/${slice.name}`}>{slice.name}</span>
+              <span className="disks-dirs__size">{humanSize(slice.kb)}</span>
+              <span className="disks-dirs__pct">{Math.round((slice.kb / totalKb) * 100)}%</span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
