@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createDisksMonitor, parseDfOutput } from "../server/disks.mjs";
+import { createDisksMonitor, parseDfOutput, parseDuOutput } from "../server/disks.mjs";
 
 // 结构取自真实 macOS df 输出（数值做无害缩放）。
 const DF_FIXTURE = [
@@ -42,4 +42,21 @@ test("disksMonitor list returns GB figures and totals", async () => {
   assert.equal(root.usePct, 45); // 108615424/239362496 ≈ 45%
   assert.equal(root.totalGb, 228.3);
   assert.ok(result.totalGb > result.usedGb);
+});
+
+test("parseDuOutput keeps only first-level dirs sorted by size", () => {
+  const duFixture = [
+    "108615424\t/",
+    "60000000\t/Users",
+    "48384000\t/Users/ian", // 二级：应被过滤
+    "40000000\t/Applications",
+    "9431040\t/private",
+    "8192\t/opt",
+  ].join("\n");
+  const { items } = parseDuOutput(duFixture, "/");
+  assert.deepEqual(items.map((item) => item.name), ["Users", "Applications", "private", "opt"]);
+  assert.equal(items[0].kb, 60000000);
+
+  const external = parseDuOutput(["38579288\t/Volumes/Data", "20000000\t/Volumes/Data/Github", "9000000\t/Volumes/Data/Backup"].join("\n"), "/Volumes/Data");
+  assert.deepEqual(external.items.map((item) => item.name), ["Github", "Backup"]);
 });

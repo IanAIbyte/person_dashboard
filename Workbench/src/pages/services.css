@@ -320,21 +320,91 @@ section > .services-form {
   overflow: hidden;
 }
 
+.disks-rowwrap {
+  border-bottom: 1px dashed var(--line);
+}
+
+.disks-rowwrap:last-child { border-bottom: none; }
+
+.disks-rowwrap--open .disks-row { background: var(--accent-wash); }
+
 .disks-row {
   display: grid;
   grid-template-columns: 170px 220px 1fr 56px;
   gap: 14px;
   align-items: center;
   padding: 10px 14px;
-  border-bottom: 1px dashed var(--line);
   font-size: 12px;
+  cursor: pointer;
 }
 
-.disks-row:last-child { border-bottom: none; }
-.disks-row:nth-child(even) { background: var(--paper); }
+.disks-row:hover { background: var(--paper); }
+.disks-row:focus-visible { outline: 2px solid var(--accent-soft); outline-offset: -2px; }
 
+.disks-row:last-child { border-bottom: none; }
 .disks-row--danger { border-left: 3px solid var(--danger); }
 .disks-row--warn { border-left: 3px solid var(--warn); }
+
+/* 卷展开：一级目录大小列表（点击卷行触发 du 分析） */
+.disks-dirs {
+  padding: 4px 14px 12px 20px;
+  background: var(--paper);
+}
+
+.disks-dirs__hint {
+  margin: 4px 0 8px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--ink-soft);
+}
+
+.disks-dirs__hint--error { color: var(--danger); }
+
+.disks-dirs__list {
+  display: grid;
+  gap: 3px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.disks-dirs__row {
+  display: grid;
+  grid-template-columns: minmax(120px, 240px) 1fr 72px;
+  gap: 10px;
+  align-items: center;
+  font-size: 11.5px;
+}
+
+.disks-dirs__name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.disks-dirs__bar {
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.disks-dirs__bar span {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  opacity: 0.65;
+}
+
+.disks-dirs__size {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-soft);
+  text-align: right;
+  white-space: nowrap;
+}
 
 .disks-row__mount {
   font-family: var(--font-mono);

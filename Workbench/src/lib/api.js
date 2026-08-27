@@ -834,6 +834,15 @@ export function loadDisks() {
   return request("/api/system/disks");
 }
 
+// 一级目录大小分析：POST 启动（du 流式），GET 轮询进度/结果。
+export function startDiskDirAnalysis(mount) {
+  return request("/api/system/disks/dirs", { method: "POST", body: JSON.stringify({ mount }) });
+}
+
+export function getDiskDirAnalysis(mount) {
+  return request(`/api/system/disks/dirs?mount=${encodeURIComponent(mount)}`);
+}
+
 export async function updateReviewSchedule(patch) {
   const result = await request("/api/daily-review/schedule", {
     method: "PUT",

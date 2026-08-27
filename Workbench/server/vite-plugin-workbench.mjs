@@ -1899,6 +1899,24 @@ export function workbenchApiPlugin({
             }
           }
 
+          if (req.method === "POST" && url.pathname === "/api/system/disks/dirs") {
+            const body = await readJson(req, 500).catch(() => null);
+            const mount = String(body?.mount ?? "");
+            try {
+              const { items } = await disksMonitor.list();
+              return json(res, 200, disksMonitor.startDirAnalysis(mount, items.map((disk) => disk.mount)));
+            } catch (error) {
+              return json(res, 400, { error: { code: "BAD_REQUEST", message: error?.message ?? "启动分析失败" } });
+            }
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/system/disks/dirs") {
+            const mount = url.searchParams.get("mount") ?? "";
+            const result = disksMonitor.getDirAnalysis(mount);
+            if (!result) return json(res, 404, { error: { code: "NOT_FOUND", message: "尚未分析" } });
+            return json(res, 200, result);
+          }
+
           if (req.method === "POST" && url.pathname === "/api/servers/probe") {
             const body = await readJson(req, 1_000).catch(() => null);
             const host = String(body?.host ?? "");

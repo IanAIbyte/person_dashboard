@@ -14,6 +14,7 @@ import {
 import { PageHeader } from "../components/PageHeader";
 import {
   addService,
+  getDiskDirAnalysis,
   loadDisks,
   loadServices,
   loadServers,
@@ -21,6 +22,7 @@ import {
   probeServerByHost,
   probeService,
   removeService,
+  startDiskDirAnalysis,
   updateService,
 } from "../lib/api";
 import "./services.css";
@@ -32,6 +34,7 @@ function statusTone(status) {
 }
 
 const TONE_LABEL = { pending: "未探测", up: "在线", down: "离线" };
+const KB_PER_GB = 1024 * 1024;
 
 const probedAtText = (probedAt) => (probedAt
   ? new Date(probedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })
@@ -150,6 +153,63 @@ function diskTone(usePct) {
   return "ok";
 }
 
+function humanSize(kb) {
+  if (kb >= KB_PER_GB) return `${(kb / KB_PER_GB).toFixed(1)} GB`;
+  if (kb >= 1024) return `${Math.round(kb / 1024)} MB`;
+  return `${kb} KB`;
+}
+
+// 卷的目录分析：展开即启动（手动触发），du 流式可边跑边看，完成即停轮询。
+function DiskDirPanel({ mount }) {
+  const [state, setState] = useState(null);
+
+  useEffect(() => {
+    let stopped = false;
+    let timer = 0;
+    const poll = async () => {
+      try {
+        const result = await getDiskDirAnalysis(mount);
+        if (!stopped) setState(result);
+        if (result?.status !== "done" && result?.status !== "failed") {
+          timer = window.setTimeout(poll, 2000);
+        }
+      } catch {
+        if (!stopped) timer = window.setTimeout(poll, 3000);
+      }
+    };
+    void startDiskDirAnalysis(mount).then(poll).catch(poll);
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+    };
+  }, [mount]);
+
+  if (!state) return <p className="disks-dirs__hint">分析已启动…</p>;
+  if (state.status === "failed") return <p className="disks-dirs__hint disks-dirs__hint--error">{state.error ?? "分析失败"}</p>;
+
+  const maxKb = state.items?.[0]?.kb ?? 1;
+  return (
+    <div className="disks-dirs">
+      <p className="disks-dirs__hint">
+        {state.status === "running"
+          ? `分析中…已发现 ${state.items.length} 个目录（du 全量遍历，大卷需数分钟）`
+          : `共 ${state.items.length} 个一级目录 · 分析于 ${new Date(state.finishedAt).toLocaleTimeString("zh-CN")}`}
+      </p>
+      <div className="disks-dirs__list">
+        {(state.items ?? []).map((item) => (
+          <div className="disks-dirs__row" key={item.name}>
+            <span className="disks-dirs__name" title={`${mount === "/" ? "" : mount}/${item.name}`}>{item.name}</span>
+            <div className="disks-dirs__bar">
+              <span style={{ width: `${Math.max((item.kb / maxKb) * 100, 1)}%` }} />
+            </div>
+            <span className="disks-dirs__size">{humanSize(item.kb)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function DiskBar({ disk }) {
   const tone = diskTone(disk.usePct);
   return (
@@ -172,6 +232,7 @@ export function ServicesPage() {
   const [formError, setFormError] = useState(null);
   const [probingKey, setProbingKey] = useState(null);
   const [disksRefreshing, setDisksRefreshing] = useState(false);
+  const [expandedMount, setExpandedMount] = useState(null);
 
   const refresh = async () => {
     await Promise.all([
@@ -365,17 +426,29 @@ export function ServicesPage() {
               <span>读取于 {new Date(disks.checkedAt).toLocaleTimeString("zh-CN")}</span>
             </div>
             <div className="disks-list">
-              {(disks.items ?? []).map((disk) => (
-                <div className={`disks-row disks-row--${diskTone(disk.usePct)}`} key={disk.mount}>
-                  <span className="disks-row__mount" title={`${disk.filesystem}（含 ${disk.mount}）`}>{disk.mount}</span>
-                  <span className="disks-row__nums">
-                    <b>{disk.usedGb} / {disk.totalGb} GB</b>
-                    <i>可用 {disk.availGb} GB</i>
-                  </span>
-                  <DiskBar disk={disk} />
-                  <span className={`disks-row__pct disks-row__pct--${diskTone(disk.usePct)}`}>{disk.usePct}%</span>
-                </div>
-              ))}
+              {(disks.items ?? []).map((disk) => {
+                const expanded = expandedMount === disk.mount;
+                return (
+                  <div className={`disks-rowwrap${expanded ? " disks-rowwrap--open" : ""}`} key={disk.mount}>
+                    <div
+                      className={`disks-row disks-row--${diskTone(disk.usePct)}`}
+                      onClick={() => setExpandedMount(expanded ? null : disk.mount)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setExpandedMount(expanded ? null : disk.mount); }}
+                    >
+                      <span className="disks-row__mount" title={`${disk.filesystem}（含 ${disk.mount}）`}>{disk.mount}</span>
+                      <span className="disks-row__nums">
+                        <b>{disk.usedGb} / {disk.totalGb} GB</b>
+                        <i>可用 {disk.availGb} GB</i>
+                      </span>
+                      <DiskBar disk={disk} />
+                      <span className={`disks-row__pct disks-row__pct--${diskTone(disk.usePct)}`}>{disk.usePct}%</span>
+                    </div>
+                    {expanded ? <DiskDirPanel mount={disk.mount} /> : null}
+                  </div>
+                );
+              })}
             </div>
           </>
         )}

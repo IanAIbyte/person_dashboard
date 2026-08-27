@@ -51,7 +51,59 @@ export function parseDfOutput(text) {
   }));
 }
 
+// 解析 du -k -d 1 输出：取 mount 下的一级目录（按大小降序）。
+// 每行 "size_kb\tpath"；path 等于 mount 本身的总量行跳过。
+export function parseDuOutput(text, mount) {
+  const prefix = mount === "/" ? "/" : `${mount}/`;
+  const items = [];
+  for (const line of String(text ?? "").split(/\r?\n/)) {
+    const match = line.match(/^(\d+)\t(.+)$/);
+    if (!match) continue;
+    const kb = Number(match[1]);
+    const dirPath = match[2];
+    if (dirPath === mount) continue; // 总量行
+    let rest = dirPath;
+    if (mount === "/") {
+      if (!rest.startsWith("/") || rest.slice(1).includes("/")) continue;
+      rest = rest.slice(1);
+    } else {
+      if (!rest.startsWith(prefix)) continue;
+      rest = rest.slice(prefix.length);
+      if (rest.includes("/")) continue;
+    }
+    if (!rest) continue;
+    items.push({ name: rest, kb });
+  }
+  items.sort((a, b) => b.kb - a.kb);
+  return { items };
+}
+
 export function createDisksMonitor({ execImpl = execFileAsync } = {}) {
+  // 目录分析任务：du -x -d 1 -k 流式输出，运行中即可返回已完成部分。
+  const dirAnalyses = new Map(); // mount -> { status, startedAt, finishedAt, items, error }
+
+  function startDirAnalysis(mount, knownMounts) {
+    if (!knownMounts.includes(mount)) throw new Error("未知挂载点");
+    const running = dirAnalyses.get(mount);
+    if (running?.status === "running") return running;
+    const entry = { status: "running", startedAt: new Date().toISOString(), finishedAt: null, items: [], error: null };
+    dirAnalyses.set(mount, entry);
+    // 手动 spawn 以便流式读取进度；-x 不跨文件系统，-d 1 只取一级目录。
+    const child = execFile("du", ["-x", "-d", "1", "-k", mount], { maxBuffer: 64 * 1024 * 1024 }, (error) => {
+      entry.status = error && entry.items.length === 0 ? "failed" : "done";
+      entry.error = entry.status === "failed" ? (error?.message ?? "分析失败") : null;
+      entry.finishedAt = new Date().toISOString();
+    });
+    let buffer = "";
+    child.stdout.on("data", (chunk) => {
+      buffer += chunk;
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      entry.items = parseDuOutput(lines.join("\n"), mount).items;
+    });
+    return entry;
+  }
+
   return {
     async list() {
       const { stdout } = await execImpl("df", ["-k", "-P"]);
@@ -71,6 +123,10 @@ export function createDisksMonitor({ execImpl = execFileAsync } = {}) {
         usedGb: gb(parsed.reduce((sum, disk) => sum + disk.usedKb, 0)),
         items,
       };
+    },
+    startDirAnalysis,
+    getDirAnalysis(mount) {
+      return dirAnalyses.get(mount) ?? null;
     },
   };
 }
