@@ -829,8 +829,9 @@ export function openServerTerminal(host) {
   return request("/api/servers/open", { method: "POST", body: JSON.stringify({ host }) });
 }
 
+// 磁盘使用情况：纯手动刷新（无缓存），由页面按钮触发。
 export function loadDisks() {
-  return cachedGet("/api/system/disks", 60_000);
+  return request("/api/system/disks");
 }
 
 export async function updateReviewSchedule(patch) {

@@ -171,6 +171,7 @@ export function ServicesPage() {
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState(null);
   const [probingKey, setProbingKey] = useState(null);
+  const [disksRefreshing, setDisksRefreshing] = useState(false);
 
   const refresh = async () => {
     await Promise.all([
@@ -225,6 +226,21 @@ export function ServicesPage() {
     if (!window.confirm(`删除服务「${item.name}」？`)) return;
     await removeService(item.id).catch(() => {});
     await refresh();
+  };
+
+  const openTerminal = async (item) => {
+    await openServerTerminal(item.host).catch(() => {});
+  };
+
+  // 磁盘为纯手动刷新：仅按钮触发，不做定时/缓存。
+  const refreshDisks = async () => {
+    if (disksRefreshing) return;
+    setDisksRefreshing(true);
+    try {
+      const response = await loadDisks();
+      setDisks(response ?? { items: [], totalGb: 0, usedGb: 0 });
+    } catch { /* 失败保留旧数据 */ }
+    finally { setDisksRefreshing(false); }
   };
 
   const serviceItems = data.items ?? [];
@@ -322,7 +338,18 @@ export function ServicesPage() {
       </section>
 
       <section aria-label="本机磁盘">
-        <h2 className="services-section">本机磁盘</h2>
+        <h2 className="services-section">
+          本机磁盘
+          <button
+            className="services-section__refresh"
+            disabled={disksRefreshing}
+            onClick={() => void refreshDisks()}
+            type="button"
+          >
+            <IconRefresh aria-hidden="true" size={13} stroke={1.7} />
+            {disksRefreshing ? "读取中…" : "刷新"}
+          </button>
+        </h2>
         {loading ? (
           <div className="services-rows" aria-hidden="true">
             {[0, 1].map((key) => <div className="services-row-skeleton" key={key} />)}
