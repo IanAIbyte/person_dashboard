@@ -3,6 +3,12 @@ Workbench/dist/
 qa/
 .DS_Store
 
+# Tool-generated artifacts (browser QA logs/screenshots, auto-generated graphs, agent state).
+.playwright-mcp/
+tab-review.png
+.terse/
+.zcode/
+
 # Local environment and credential files. Keep sanitized examples trackable.
 .env
 .env.*
