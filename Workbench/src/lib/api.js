@@ -792,6 +792,27 @@ export function optimizePrompt({ idea, template, context }) {
   });
 }
 
+// ---- 云服务管理 ----
+
+export function loadServices() {
+  return cachedGet("/api/services", 15_000);
+}
+
+export function addService({ name, url, note }) {
+  return request("/api/services", { method: "POST", body: JSON.stringify({ name, url, note }) });
+}
+
+export function updateService(id, { name, url, note }) {
+  return request(`/api/services/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify({ name, url, note }),
+  });
+}
+
+export function removeService(id) {
+  return request(`/api/services/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
 export async function updateReviewSchedule(patch) {
   const result = await request("/api/daily-review/schedule", {
     method: "PUT",

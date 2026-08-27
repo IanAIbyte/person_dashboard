@@ -1,0 +1,219 @@
+/* 服务管理页 —— 复用 :root 变量与全站圆角体系（输入 8 / 卡片 14）。 */
+
+.services-head-ops {
+  display: flex;
+  gap: 8px;
+}
+
+.services-head-ops button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.services-head-ops--primary {
+  border-color: var(--accent-soft);
+  color: var(--accent);
+}
+
+.services-meta {
+  display: flex;
+  gap: 18px;
+  margin: 0 0 14px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-soft);
+}
+
+.services-meta__up { color: var(--ok); }
+
+.services-form {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid var(--accent-soft);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.services-form input {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--paper);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+}
+
+.services-form__ops {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.services-form__ops button {
+  min-height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--accent-soft);
+  border-radius: var(--r-sm);
+  background: var(--accent-wash);
+  color: var(--accent);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.services-form__ops button[type="button"] {
+  border-color: var(--line-strong);
+  background: none;
+  color: var(--ink-soft);
+}
+
+.services-form__ops button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.services-form__error {
+  font-size: 11px;
+  color: var(--danger);
+}
+
+.services-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.services-card {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.services-card--down { border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
+
+.services-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.services-card__head strong {
+  flex: 1;
+  font-size: 13px;
+}
+
+.services-card__state {
+  font-size: 10.5px;
+  color: var(--ink-soft);
+}
+
+.services-card__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-pill);
+}
+
+.services-card__dot--up { background: var(--ok); }
+.services-card__dot--down { background: var(--danger); }
+.services-card__dot--pending { background: var(--ink-faint); }
+
+.services-card__url {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.services-card__url:hover { text-decoration: underline; }
+
+.services-card__stats {
+  display: flex;
+  gap: 14px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-soft);
+}
+
+.services-card__note {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.services-card__ops {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+
+.services-card__ops a,
+.services-card__ops button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 26px;
+  padding: 0 9px;
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 11px;
+  text-decoration: none;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+}
+
+.services-card__ops a:hover,
+.services-card__ops button:hover {
+  background: var(--paper);
+  color: var(--accent);
+}
+
+.services-card__remove:hover {
+  color: var(--danger) !important;
+}
+
+.services-skeleton {
+  height: 132px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: linear-gradient(100deg, var(--surface-sunken) 40%, #e9e9ec 50%, var(--surface-sunken) 60%);
+  background-size: 200% 100%;
+  animation: services-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes services-shimmer {
+  to { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .services-skeleton { animation: none; }
+}
+
+.services-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 48px 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+}

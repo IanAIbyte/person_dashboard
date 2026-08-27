@@ -12,6 +12,7 @@ import { TopicsPage } from "./pages/TopicsPage";
 import { CareerPage } from "./pages/CareerPage";
 import { StockWatchlistPage } from "./pages/StockWatchlistPage";
 import { PromptsLibraryPage } from "./pages/PromptsLibraryPage";
+import { ServicesPage } from "./pages/ServicesPage";
 import { useVaultSync } from "./hooks/useVaultSync";
 
 const localWorkbench = import.meta.env.VITE_WORKBENCH_HOSTED !== "true";
@@ -98,6 +99,7 @@ export function App() {
               }
             />
           ) : null}
+          {localWorkbench ? <Route path="/services" element={<ServicesPage />} /> : null}
           <Route
             path="/topics"
             element={<TopicsPage onOpenDocument={openDocument} />}

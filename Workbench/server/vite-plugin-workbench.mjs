@@ -64,6 +64,7 @@ import { loadDailyReviewConfig } from "./daily-review-config.mjs";
 import { createPortfolioRepository, PORTFOLIO_PATH } from "./portfolio.mjs";
 import { createSentimentDataService } from "./sentiment-data.mjs";
 import { createPromptsLibrary } from "./prompts-library.mjs";
+import { checkService, createServicesStore } from "./services-store.mjs";
 import { createCoachPromptRepository, COACH_PROMPT_PATH } from "./coach-prompt.mjs";
 import { createReviewScheduleRepository, REVIEW_SCHEDULE_PATH } from "./review-schedule.mjs";
 import {
@@ -912,6 +913,38 @@ export function workbenchApiPlugin({
   const portfolioRepo = createPortfolioRepository({ vaultRoot });
   const sentimentService = createSentimentDataService();
   const promptsLibrary = createPromptsLibrary({ llmClient });
+  const servicesStore = createServicesStore({ vaultRoot });
+  // 健康探测结果内存缓存（60s），避免列表每次渲染都打目标服务。
+  const servicesStatusCache = new Map(); // id -> { status, checkedAt }
+  async function servicesWithStatus() {
+    const state = await servicesStore.list();
+    const now = Date.now();
+    const expired = (meta) => now - new Date(meta.checkedAt).getTime() > 60_000;
+    await Promise.all(state.items.map(async (item) => {
+      const cached = servicesStatusCache.get(item.id);
+      if (!cached || expired(cached) || cached.url !== item.url) {
+        servicesStatusCache.set(item.id, {
+          url: item.url,
+          checkedAt: new Date().toISOString(),
+          status: await checkService(item.url),
+        });
+      }
+    }));
+    for (const key of [...servicesStatusCache.keys()]) {
+      if (!state.items.some((item) => item.id === key)) servicesStatusCache.delete(key);
+    }
+    return {
+      updatedAt: state.updatedAt,
+      total: state.items.length,
+      items: state.items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        url: item.url,
+        note: item.note,
+        status: servicesStatusCache.get(item.id)?.status ?? null,
+      })),
+    };
+  }
   const coachPrompt = createCoachPromptRepository({ vaultRoot });
   const reviewSchedule = createReviewScheduleRepository({ vaultRoot });
   const dailyReview = createDailyReviewService({
@@ -1790,6 +1823,44 @@ export function workbenchApiPlugin({
               updatedAt: codes.updatedAt,
               items: codes.items,
             });
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/services") {
+            return json(res, 200, await servicesWithStatus());
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/services") {
+            const body = await readJson(req, 4 * 1024);
+            assertAllowedObjectKeys(body, new Set(["name", "url", "note"]), "INVALID_SERVICES_REQUEST");
+            try {
+              const { item } = await servicesStore.add(body);
+              vaultSync.notifyPaths([servicesStore.filePath]);
+              return json(res, 200, item);
+            } catch (error) {
+              return json(res, 400, { error: { code: "INVALID_SERVICES_REQUEST", message: error?.message ?? "保存失败" } });
+            }
+          }
+
+          const servicesMatch = url.pathname.match(/^\/api\/services\/([^/]+)$/);
+          if (servicesMatch) {
+            const id = decodeURIComponent(servicesMatch[1]);
+            if (req.method === "PUT") {
+              const body = await readJson(req, 4 * 1024);
+              assertAllowedObjectKeys(body, new Set(["name", "url", "note"]), "INVALID_SERVICES_REQUEST");
+              try {
+                const result = await servicesStore.update(id, body);
+                if (!result) return json(res, 404, { error: { code: "NOT_FOUND", message: "服务不存在" } });
+                vaultSync.notifyPaths([servicesStore.filePath]);
+                return json(res, 200, result.item);
+              } catch (error) {
+                return json(res, 400, { error: { code: "INVALID_SERVICES_REQUEST", message: error?.message ?? "更新失败" } });
+              }
+            }
+            if (req.method === "DELETE") {
+              const removed = await servicesStore.remove(id);
+              if (removed) vaultSync.notifyPaths([servicesStore.filePath]);
+              return json(res, 200, { removed });
+            }
           }
 
           if (req.method === "PUT" && url.pathname === "/api/stock-codes") {

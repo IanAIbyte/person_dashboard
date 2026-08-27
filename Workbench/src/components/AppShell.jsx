@@ -5,6 +5,7 @@ import {
   IconBooks,
   IconBriefcase,
   IconBulb,
+  IconServer2,
   IconSparkles,
   IconChartCandle,
   IconChevronLeft,
@@ -30,6 +31,9 @@ const primaryNavigation = [
     : []),
   ...(localWorkbench
     ? [{ to: "/stocks", label: "每日复盘", icon: IconChartCandle }]
+    : []),
+  ...(localWorkbench
+    ? [{ to: "/services", label: "服务", icon: IconServer2 }]
     : []),
   { to: "/topics", label: "灵感库", icon: IconBulb },
   { to: "/prompts", label: "提示词", icon: IconSparkles },
