@@ -232,7 +232,8 @@ export function ServicesPage() {
   const [formError, setFormError] = useState(null);
   const [probingKey, setProbingKey] = useState(null);
   const [disksRefreshing, setDisksRefreshing] = useState(false);
-  const [expandedMount, setExpandedMount] = useState(null);
+  // 默认全部展开（自动启动目录分析）；点击卷行可收起/再展开。
+  const [collapsedMounts, setCollapsedMounts] = useState(() => new Set());
 
   const refresh = async () => {
     await Promise.all([
@@ -427,15 +428,21 @@ export function ServicesPage() {
             </div>
             <div className="disks-list">
               {(disks.items ?? []).map((disk) => {
-                const expanded = expandedMount === disk.mount;
+                const expanded = !collapsedMounts.has(disk.mount);
+                const toggle = () => setCollapsedMounts((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(disk.mount)) next.delete(disk.mount);
+                  else next.add(disk.mount);
+                  return next;
+                });
                 return (
                   <div className={`disks-rowwrap${expanded ? " disks-rowwrap--open" : ""}`} key={disk.mount}>
                     <div
                       className={`disks-row disks-row--${diskTone(disk.usePct)}`}
-                      onClick={() => setExpandedMount(expanded ? null : disk.mount)}
+                      onClick={toggle}
                       role="button"
                       tabIndex={0}
-                      onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setExpandedMount(expanded ? null : disk.mount); }}
+                      onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") toggle(); }}
                     >
                       <span className="disks-row__mount" title={`${disk.filesystem}（含 ${disk.mount}）`}>{disk.mount}</span>
                       <span className="disks-row__nums">
