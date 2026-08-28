@@ -805,6 +805,7 @@ const WATCHDOG_STATE_FILES = {
   alerts: ".workbench-stock-alerts.json",
   config: ".workbench-watchdog-config.json",
   valuation: ".workbench-valuation-history.json",
+  diskCache: ".workbench-disk-cache.json",
 };
 const WATCHDOG_STATE_DIR = "10_raw/my-thoughts/reading-notes";
 
@@ -917,7 +918,8 @@ export function workbenchApiPlugin({
   const promptsLibrary = createPromptsLibrary({ llmClient });
   const servicesStore = createServicesStore({ vaultRoot });
   const serversRegistry = createServersRegistry();
-  const disksMonitor = createDisksMonitor();
+  // 磁盘每日缓存与 watchdog 状态同目录（vault 内运行态文件，git 忽略）。
+  const disksMonitor = createDisksMonitor({ statePath: watchdogStatePath("diskCache") });
   // 健康探测低频策略：自动探测 1 天一次（缓存 24h），页面展示上次探测时间，
   // 手动按钮经 force 接口即时重测，避免给目标服务压力。
   const PROBE_TTL_MS = 24 * 60 * 60 * 1000;

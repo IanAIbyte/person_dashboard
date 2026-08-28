@@ -3,7 +3,11 @@
 // 真实用量在 Data 卷；按容器分组取用量最大者，挂载点规范化为 /。
 
 import { execFile } from "node:child_process";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { promisify } from "node:util";
+
+import { formatShanghaiDate } from "./security.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -78,20 +82,57 @@ export function parseDuOutput(text, mount) {
   return { items };
 }
 
-export function createDisksMonitor({ execImpl = execFileAsync } = {}) {
-  // 用量列表缓存：页面刷新零重查，手动刷新（refresh）强制重跑。
+export function createDisksMonitor({ execImpl = execFileAsync, statePath = null, nowImpl = () => new Date() } = {}) {
+  // 每日缓存：当天第一次自动刷新取数（df + du），之后整页打开直接复用；
+  // 手动刷新（refresh/force）才重跑，重跑结果成为当天新缓存。
+  // 快照落盘 statePath（与 watchdog 状态同目录约定），服务重启后当天依然零重跑。
   let listCache = null; // { result, at }
-  const LIST_TTL_MS = 10 * 60 * 1000;
   // 目录分析任务：du -x -d 1 -k 流式输出，运行中即可返回已完成部分。
   const dirAnalyses = new Map(); // mount -> { status, startedAt, finishedAt, items, error }
-  const DIR_TTL_MS = 60 * 60 * 1000;
+  const ready = hydrate();
+
+  function dayKey(date) {
+    return formatShanghaiDate(date ?? nowImpl());
+  }
+
+  async function hydrate() {
+    if (!statePath) return;
+    try {
+      const state = JSON.parse(await readFile(statePath, "utf8"));
+      if (state?.day !== dayKey()) return; // 非当天快照视为过期，等第一次刷新重建
+      if (state.list?.checkedAt) listCache = { result: state.list, at: Date.now() };
+      for (const [mount, entry] of Object.entries(state.dirs ?? {})) {
+        if (entry?.status === "done") dirAnalyses.set(mount, entry);
+      }
+    } catch {
+      // 无快照或损坏：与"当天尚未刷新过"等价，忽略即可。
+    }
+  }
+
+  async function persist() {
+    if (!statePath) return;
+    const dirs = {};
+    for (const [mount, entry] of dirAnalyses) {
+      if (entry.status === "done") dirs[mount] = entry;
+    }
+    const tmp = `${statePath}.${Date.now()}.tmp`;
+    try {
+      await mkdir(path.dirname(statePath), { recursive: true });
+      await writeFile(tmp, `${JSON.stringify({ day: dayKey(), list: listCache?.result ?? null, dirs }, null, 2)}\n`, "utf8");
+      await rename(tmp, statePath);
+    } catch {
+      // 落盘失败只影响重启后的复用，内存缓存照常工作。
+    } finally {
+      await unlink(tmp).catch(() => {});
+    }
+  }
 
   function startDirAnalysis(mount, knownMounts) {
     if (!knownMounts.includes(mount)) throw new Error("未知挂载点");
     const running = dirAnalyses.get(mount);
     if (running?.status === "running") return running;
-    // 已完成且未过期：直接复用，避免每次进页都重新 du。
-    if (running?.status === "done" && Date.now() - new Date(running.finishedAt).getTime() < DIR_TTL_MS) {
+    // 当天已完成：直接复用，避免每次进页都重新 du。
+    if (running?.status === "done" && dayKey(new Date(running.finishedAt)) === dayKey()) {
       return running;
     }
     const entry = { status: "running", startedAt: new Date().toISOString(), finishedAt: null, items: [], error: null };
@@ -101,6 +142,7 @@ export function createDisksMonitor({ execImpl = execFileAsync } = {}) {
       entry.status = error && entry.items.length === 0 ? "failed" : "done";
       entry.error = entry.status === "failed" ? (error?.message ?? "分析失败") : null;
       entry.finishedAt = new Date().toISOString();
+      if (entry.status === "done") void persist();
     });
     let buffer = "";
     child.stdout.on("data", (chunk) => {
@@ -114,7 +156,8 @@ export function createDisksMonitor({ execImpl = execFileAsync } = {}) {
 
   return {
     async list({ force = false } = {}) {
-      if (!force && listCache && Date.now() - listCache.at < LIST_TTL_MS) {
+      await ready;
+      if (!force && listCache && dayKey(new Date(listCache.at)) === dayKey()) {
         return listCache.result;
       }
       const { stdout } = await execImpl("df", ["-k", "-P"]);
@@ -135,10 +178,12 @@ export function createDisksMonitor({ execImpl = execFileAsync } = {}) {
         items,
       };
       listCache = { result, at: Date.now() };
+      await persist(); // 落定后再返回，保证"重启后当天复用"始终成立
       return result;
     },
     // 手动刷新：强制重跑 df，并使目录分析缓存过期（面板重新拉取时重分析）。
     async refresh() {
+      await ready;
       for (const [mount, entry] of [...dirAnalyses]) {
         if (entry.status !== "running") dirAnalyses.delete(mount);
       }
