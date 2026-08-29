@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -188,4 +188,56 @@ test("update 原地覆盖内容但保持文件名与 created 不变", async (t) 
     repository.update("10_raw/prompts/不存在.md", { title: "t", content: "x" }),
     (error) => error instanceof PromptCollectionError && error.code === "PROMPT_NOT_FOUND",
   );
+});
+
+test("remove 删除文件，不存在时报 PROMPT_NOT_FOUND", async (t) => {
+  const vaultRoot = await makeVault(t);
+  const repository = createPromptCollectionRepository({ vaultRoot });
+  const created = await repository.create({ title: "待删", content: "x" });
+  assert.deepEqual(await repository.remove(created.id), { id: created.id });
+  const { items } = await repository.list();
+  assert.deepEqual(items, []);
+  await assert.rejects(
+    repository.remove(created.id),
+    (error) => error instanceof PromptCollectionError && error.code === "PROMPT_NOT_FOUND",
+  );
+});
+
+test("越界 ID 一律拒绝（路径穿越/绝对路径/非 md/前缀不符）", async (t) => {
+  const vaultRoot = await makeVault(t);
+  const repository = createPromptCollectionRepository({ vaultRoot });
+  for (const badId of [
+    "10_raw/prompts/../wiki/index.md",
+    "/etc/passwd",
+    "10_raw/articles/one.md",
+    "10_raw/prompts/a.txt",
+    "10_raw/prompts/子/文件.md",
+    "10_raw\\prompts\\a.md",
+    "10_raw/prompts/.hidden.md",
+    "",
+    null,
+  ]) {
+    await assert.rejects(
+      repository.update(badId, { title: "t", content: "x" }),
+      (error) => error instanceof PromptCollectionError && error.code === "INVALID_PROMPT_ID",
+    );
+    await assert.rejects(
+      repository.remove(badId),
+      (error) => error instanceof PromptCollectionError && error.code === "INVALID_PROMPT_ID",
+    );
+  }
+});
+
+test("提示词目录是指向外部目录的符号链接时拒绝写入", async (t) => {
+  const vaultRoot = await makeVault(t);
+  const outside = await mkdtemp(path.join(os.tmpdir(), "workbench-prompt-outside-"));
+  t.after(() => rm(outside, { recursive: true, force: true }));
+  await mkdir(path.join(vaultRoot, "10_raw"), { recursive: true });
+  await symlink(outside, path.join(vaultRoot, "10_raw", "prompts"));
+  const repository = createPromptCollectionRepository({ vaultRoot });
+  await assert.rejects(repository.create({ title: "t", content: "x" }), (error) =>
+    error instanceof PromptCollectionError &&
+    ["UNSAFE_PROMPTS_DIRECTORY", "SYMLINK_ESCAPE"].includes(error.code),
+  );
+  assert.deepEqual(await readdir(outside), []);
 });

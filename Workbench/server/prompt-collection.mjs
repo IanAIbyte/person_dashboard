@@ -333,5 +333,18 @@ export function createPromptCollectionRepository({
     return item;
   }
 
-  return Object.freeze({ list, create, update });
+  async function remove(id) {
+    const realVaultRoot = await resolveVaultRoot(resolvedRoot);
+    const promptsDirectory = await ensurePromptsDirectory(realVaultRoot);
+    const fileName = resolveId(id);
+    const targetPath = path.join(promptsDirectory, fileName);
+    const details = await lstat(targetPath).catch(() => null);
+    if (!details || details.isSymbolicLink() || !details.isFile()) {
+      fail("PROMPT_NOT_FOUND", "提示词不存在。");
+    }
+    await unlink(targetPath);
+    return { id: `${PROMPTS_DIRECTORY}/${fileName}` };
+  }
+
+  return Object.freeze({ list, create, update, remove });
 }
