@@ -45,6 +45,87 @@
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* 追加 token（暗色主题引入；亮色值 = 现视觉等价物） */
+:root {
+  --on-accent: #ffffff;        /* accent 实色底上的文字 */
+  --shimmer-highlight: #e9e9ec;
+  /* 知识星图节点类型色（原 src/lib/graph.js TYPE_META 值） */
+  --kg-type-concept: #7c3aed;
+  --kg-type-framework: #6d28d9;
+  --kg-type-entity: #7c3aed;
+  --kg-type-diagnosis: #8b5cf6;
+  --kg-type-analysis: #5b21b6;
+  --kg-type-comparison: #a78bfa;
+  --kg-type-case: #8b5cf6;
+  --kg-type-source-summary: #a1a1aa;
+  --kg-type-source: #71717a;
+  --kg-type-topic: #7c3aed;
+  --kg-type-conflict: #4c1d95;
+  --kg-type-question: #c4b5fd;
+  --kg-type-other: #d4d4d8;
+  /* 磁盘环形图分类色板（原 ServicesPage.jsx DIR_COLORS） */
+  --disk-c1: #0ea5e9;  --disk-c2: #8b5cf6;  --disk-c3: #f59e0b;
+  --disk-c4: #10b981;  --disk-c5: #ec4899;  --disk-c6: #14b8a6;
+  --disk-c7: #6366f1;  --disk-c8: #f97316;  --disk-c9: #06b6d4;
+  --disk-c10: #a855f7; --disk-c11: #94a3b8;
+}
+
+/* ============================================================
+   暗色主题 · 冷蓝黑阶梯 + 青色点缀（参考 AIHOT）
+   规则：只覆盖语义 token；组件层零改动。accent-strong/soft
+   方向反转——暗色下 strong=提亮(hover)、soft=加深(边框)。
+   ============================================================ */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --paper: #0f151b;
+  --surface: #151c24;
+  --surface-sunken: #0b1117;
+  --ink: #e6edf3;
+  --ink-soft: #9aa7b4;
+  --ink-faint: #7a8592;      /* paper 4.90:1 / surface 4.58:1，达 AA */
+
+  --line: #1f2933;
+  --line-strong: #2c3a47;
+
+  --accent: #22d3ee;         /* cyan-400 */
+  --accent-strong: #67e8f9;  /* cyan-300，hover 提亮 */
+  --accent-soft: #0e7490;    /* cyan-700，边框加深 */
+  --accent-wash: rgba(34, 211, 238, 0.10);
+  --accent-glow: rgba(34, 211, 238, 0.16);
+
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --danger: #f87171;
+
+  --on-accent: #08252b;      /* 青底上的深字 */
+  --shimmer-highlight: #1c2630;
+
+  --kg-type-concept: #67e8f9;
+  --kg-type-framework: #38bdf8;
+  --kg-type-entity: #22d3ee;
+  --kg-type-diagnosis: #7dd3fc;
+  --kg-type-analysis: #0ea5e9;
+  --kg-type-comparison: #a5f3fc;
+  --kg-type-case: #2dd4bf;
+  --kg-type-source-summary: #9aa7b4;
+  --kg-type-source: #7a8592;
+  --kg-type-topic: #22d3ee;
+  --kg-type-conflict: #f87171;
+  --kg-type-question: #bae6fd;
+  --kg-type-other: #6b7683;
+
+  --disk-c1: #38bdf8;  --disk-c2: #a78bfa;  --disk-c3: #fbbf24;
+  --disk-c4: #34d399;  --disk-c5: #f472b6;  --disk-c6: #2dd4bf;
+  --disk-c7: #818cf8;  --disk-c8: #fb923c;  --disk-c9: #22d3ee;
+  --disk-c10: #c084fc; --disk-c11: #9aa7b4;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 30px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.5);
+  --shadow-accent: 0 12px 34px var(--accent-glow);
+}
+
 /* Brainstorm working layer */
 .page--brainstorm {
   max-width: 1500px;
