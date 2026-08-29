@@ -68,6 +68,7 @@ import { checkService, createServicesStore } from "./services-store.mjs";
 import { createServersRegistry, openItermSsh, probeServer } from "./servers-registry.mjs";
 import { createDisksMonitor } from "./disks.mjs";
 import { createCoachPromptRepository, COACH_PROMPT_PATH } from "./coach-prompt.mjs";
+import { createPromptCollectionRepository } from "./prompt-collection.mjs";
 import { createReviewScheduleRepository, REVIEW_SCHEDULE_PATH } from "./review-schedule.mjs";
 import {
   obsidianGraphPayload,
@@ -999,6 +1000,7 @@ export function workbenchApiPlugin({
     };
   }
   const coachPrompt = createCoachPromptRepository({ vaultRoot });
+  const promptCollection = createPromptCollectionRepository({ vaultRoot });
   const reviewSchedule = createReviewScheduleRepository({ vaultRoot });
   const dailyReview = createDailyReviewService({
     marketService: marketData,
@@ -2421,6 +2423,40 @@ export function workbenchApiPlugin({
             } catch (error) {
               return json(res, 502, { error: { code: "PROMPTS_UNAVAILABLE", message: error?.message ?? "提示词库暂不可用" } });
             }
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/prompts/collection") {
+            return json(res, 200, await promptCollection.list());
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/prompts/collection") {
+            const body = await readJson(req, 64 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["title", "content", "tags", "source"]),
+              "INVALID_PROMPT_REQUEST",
+            );
+            const item = await promptCollection.create(body);
+            vaultSync.notifyPaths([item.id]);
+            return json(res, 200, item);
+          }
+
+          if (req.method === "PATCH" && url.pathname === "/api/prompts/collection") {
+            const body = await readJson(req, 64 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["title", "content", "tags", "source"]),
+              "INVALID_PROMPT_REQUEST",
+            );
+            const item = await promptCollection.update(url.searchParams.get("id"), body);
+            vaultSync.notifyPaths([item.id]);
+            return json(res, 200, item);
+          }
+
+          if (req.method === "DELETE" && url.pathname === "/api/prompts/collection") {
+            const result = await promptCollection.remove(url.searchParams.get("id"));
+            vaultSync.notifyPaths([result.id]);
+            return json(res, 200, result);
           }
 
           if (req.method === "GET" && url.pathname === "/api/daily-review/sentiment") {

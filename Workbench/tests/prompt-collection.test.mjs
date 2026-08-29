@@ -9,6 +9,9 @@ import {
   PromptCollectionError,
   createPromptCollectionRepository,
 } from "../server/prompt-collection.mjs";
+import http from "node:http";
+import { createServer as createViteServer } from "vite";
+import { workbenchApiPlugin } from "../server/vite-plugin-workbench.mjs";
 
 async function makeVault(t) {
   const vaultRoot = await mkdtemp(path.join(os.tmpdir(), "workbench-prompt-collection-"));
@@ -240,4 +243,81 @@ test("提示词目录是指向外部目录的符号链接时拒绝写入", async
     ["UNSAFE_PROMPTS_DIRECTORY", "SYMLINK_ESCAPE"].includes(error.code),
   );
   assert.deepEqual(await readdir(outside), []);
+});
+
+async function startApiFixture(t) {
+  const vaultRoot = await makeVault(t);
+  const vite = await createViteServer({
+    configFile: false,
+    logLevel: "silent",
+    server: { middlewareMode: true },
+    plugins: [workbenchApiPlugin({ vaultRoot })],
+  });
+  const server = http.createServer(vite.middlewares);
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  t.after(async () => {
+    await new Promise((resolve) => server.close(resolve));
+    await vite.close();
+  });
+  return `http://127.0.0.1:${address.port}`;
+}
+
+test("API 冒烟：GET 空列表 → POST 创建 → PATCH 更新 → DELETE 删除", async (t) => {
+  const origin = await startApiFixture(t);
+  const jsonHeaders = { "Content-Type": "application/json" };
+
+  const empty = await fetch(`${origin}/api/prompts/collection`);
+  assert.equal(empty.status, 200);
+  assert.deepEqual(await empty.json(), { items: [], tags: [] });
+
+  const created = await fetch(`${origin}/api/prompts/collection`, {
+    headers: jsonHeaders,
+    method: "POST",
+    body: JSON.stringify({ title: "接口冒烟", content: "正文", tags: ["api"] }),
+  });
+  assert.equal(created.status, 200);
+  const item = await created.json();
+  assert.equal(item.id, "10_raw/prompts/" + String(new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" })) + "-接口冒烟.md");
+
+  const updated = await fetch(
+    `${origin}/api/prompts/collection?${new URLSearchParams({ id: item.id })}`,
+    { headers: jsonHeaders, method: "PATCH", body: JSON.stringify({ title: "接口冒烟", content: "正文v2", tags: [], source: "" }) },
+  );
+  assert.equal(updated.status, 200);
+  assert.equal((await updated.json()).content, "正文v2");
+
+  const removed = await fetch(
+    `${origin}/api/prompts/collection?${new URLSearchParams({ id: item.id })}`,
+    { headers: jsonHeaders, method: "DELETE" },
+  );
+  assert.equal(removed.status, 200);
+  assert.deepEqual(await removed.json(), { id: item.id });
+});
+
+test("API：非法 ID 返回 400，不存在返回 404，多余字段返回 400", async (t) => {
+  const origin = await startApiFixture(t);
+  const jsonHeaders = { "Content-Type": "application/json" };
+
+  const traversal = await fetch(
+    `${origin}/api/prompts/collection?${new URLSearchParams({ id: "10_raw/prompts/../wiki/x.md" })}`,
+    { headers: jsonHeaders, method: "PATCH", body: JSON.stringify({ title: "t", content: "x" }) },
+  );
+  assert.equal(traversal.status, 400);
+
+  const missing = await fetch(
+    `${origin}/api/prompts/collection?${new URLSearchParams({ id: "10_raw/prompts/2020-01-01-无.md" })}`,
+    { headers: jsonHeaders, method: "PATCH", body: JSON.stringify({ title: "t", content: "x" }) },
+  );
+  assert.equal(missing.status, 404);
+
+  const extraKey = await fetch(`${origin}/api/prompts/collection`, {
+    headers: jsonHeaders,
+    method: "POST",
+    body: JSON.stringify({ title: "t", content: "x", hack: 1 }),
+  });
+  assert.equal(extraKey.status, 400);
 });
