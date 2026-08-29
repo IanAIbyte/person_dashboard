@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { IconCopy, IconPlus, IconSearch, IconSparkles } from "@tabler/icons-react";
-import { loadPromptCollection } from "../../lib/api";
+import { createPromptItem, deletePromptItem, loadPromptCollection, updatePromptItem } from "../../lib/api";
 import { apiErrorMessage } from "../../lib/api-errors";
 
 export function PromptCollectionPanel() {
@@ -15,6 +15,7 @@ export function PromptCollectionPanel() {
   const [activeTag, setActiveTag] = useState("");
   const [openIndex, setOpenIndex] = useState(-1);
   const [copiedIndex, setCopiedIndex] = useState(-1);
+  const [form, setForm] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,6 +51,67 @@ export function PromptCollectionPanel() {
     });
   }, [items, query, activeTag]);
 
+  const openCreate = () =>
+    setForm({ item: null, title: "", content: "", tagText: "", source: "", busy: false, error: null });
+
+  const openEdit = (index) => {
+    const item = filtered[index];
+    if (!item) return;
+    setForm({
+      item,
+      title: item.title,
+      content: item.content,
+      tagText: item.tags.join("、"),
+      source: item.source ?? "",
+      busy: false,
+      error: null,
+    });
+  };
+
+  const patchForm = (changes) => setForm((state) => ({ ...state, ...changes }));
+
+  const submitForm = async () => {
+    if (!form || form.busy) return;
+    const title = form.title.trim();
+    const content = form.content.trim();
+    if (!title || !content) {
+      patchForm({ error: "标题和正文不能为空。" });
+      return;
+    }
+    const tags = form.tagText.split(/[,，、\s]+/).filter(Boolean);
+    setForm((state) => ({ ...state, busy: true, error: null }));
+    try {
+      const payload = { title, content, tags, source: form.source.trim() };
+      if (form.item) {
+        await updatePromptItem(form.item.id, payload);
+      } else {
+        await createPromptItem(payload);
+      }
+      setForm(null);
+      setOpenIndex(-1);
+      const data = await loadPromptCollection();
+      setItems(data?.items ?? []);
+      setTags(data?.tags ?? []);
+    } catch (caught) {
+      setForm((state) => ({ ...state, busy: false, error: apiErrorMessage(caught, "保存失败") }));
+    }
+  };
+
+  const removeItem = async (index) => {
+    const item = filtered[index];
+    if (!item) return;
+    if (!window.confirm(`删除「${item.title}」？vault 中的文件会一并删除。`)) return;
+    try {
+      await deletePromptItem(item.id);
+      const data = await loadPromptCollection();
+      setItems(data?.items ?? []);
+      setTags(data?.tags ?? []);
+      setOpenIndex(-1);
+    } catch (caught) {
+      setError(apiErrorMessage(caught, "删除失败"));
+    }
+  };
+
   const copy = async (index) => {
     const item = filtered[index];
     if (!item) return;
@@ -72,7 +134,7 @@ export function PromptCollectionPanel() {
             value={query}
           />
         </label>
-        <button className="prompts-col__new" type="button">
+        <button className="prompts-col__new" onClick={openCreate} type="button">
           <IconPlus aria-hidden="true" size={14} stroke={1.7} />
           新建收藏
         </button>
@@ -141,6 +203,12 @@ export function PromptCollectionPanel() {
                       <IconCopy aria-hidden="true" size={13} stroke={1.7} />
                       {copiedIndex === index ? "已复制" : "复制全文"}
                     </button>
+                    <button className="prompts-item__copy" onClick={() => openEdit(index)} type="button">
+                      编辑
+                    </button>
+                    <button className="prompts-item__copy" onClick={() => removeItem(index)} type="button">
+                      删除
+                    </button>
                   </div>
                 </div>
               ) : null}
@@ -153,6 +221,57 @@ export function PromptCollectionPanel() {
         <div className="prompts-empty">
           <IconSparkles aria-hidden="true" size={20} stroke={1.6} />
           <p>还没有收藏。在公开模板里找到合适的底子改造成自己的，或点「新建收藏」。</p>
+        </div>
+      ) : null}
+
+      {form ? (
+        <div className="prompts-optimizer" role="dialog" aria-label={form.item ? "编辑收藏" : "新建收藏"}>
+          <header className="prompts-optimizer__head">
+            <strong>{form.item ? "编辑收藏" : "新建收藏"}</strong>
+            <button onClick={() => setForm(null)} type="button">关闭</button>
+          </header>
+          <label className="prompts-optimizer__field">
+            <span>标题（必填）</span>
+            <input
+              onChange={(event) => patchForm({ title: event.target.value })}
+              placeholder="例如：代码审查提示词"
+              value={form.title}
+            />
+          </label>
+          <label className="prompts-optimizer__field">
+            <span>提示词正文（必填）</span>
+            <textarea
+              onChange={(event) => patchForm({ content: event.target.value })}
+              placeholder="粘贴提示词原文，原样保存"
+              rows={10}
+              value={form.content}
+            />
+          </label>
+          <label className="prompts-optimizer__field">
+            <span>标签（用逗号或顿号分隔）</span>
+            <input
+              onChange={(event) => patchForm({ tagText: event.target.value })}
+              placeholder="写作、代码、review"
+              value={form.tagText}
+            />
+          </label>
+          <label className="prompts-optimizer__field">
+            <span>来源 URL（可选）</span>
+            <input
+              onChange={(event) => patchForm({ source: event.target.value })}
+              placeholder="https://…"
+              value={form.source}
+            />
+          </label>
+          <button
+            className="prompts-optimizer__run"
+            disabled={form.busy}
+            onClick={submitForm}
+            type="button"
+          >
+            {form.busy ? "保存中…" : form.item ? "保存修改" : "保存到知识库"}
+          </button>
+          {form.error ? <p className="prompts-optimizer__error">{form.error}</p> : null}
         </div>
       ) : null}
     </div>
