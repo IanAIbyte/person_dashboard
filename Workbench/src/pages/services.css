@@ -1,0 +1,458 @@
+/* 服务管理页：单页两段清单行。复用 :root 变量与全站圆角体系（输入 8 / 容器 14）。 */
+
+.services-head-ops {
+  display: flex;
+  gap: 8px;
+}
+
+.services-head-ops button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.services-head-ops--primary {
+  border-color: var(--accent-soft);
+  color: var(--accent);
+}
+
+.services-meta {
+  display: flex;
+  gap: 18px;
+  margin: 0 0 16px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-soft);
+}
+
+.services-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 8px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.services-section__refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--ink-soft);
+  font-size: 10.5px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.services-section__refresh:hover {
+  border-color: var(--accent-soft);
+  color: var(--accent);
+}
+
+.services-section__refresh:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+/* ---- 行清单 ---- */
+
+.services-rows {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.services-row {
+  display: grid;
+  /* 末列固定宽：各行是独立 grid 实例，auto 会各行各算导致表头与数据错位 */
+  grid-template-columns: 76px minmax(140px, 1.1fr) minmax(220px, 1.6fr) 130px 130px 120px;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px dashed var(--line);
+  font-size: 12px;
+}
+
+.services-row:last-child { border-bottom: none; }
+.services-row:nth-child(even) { background: var(--paper); }
+
+.services-row--head {
+  padding: 5px 12px;
+  background: var(--surface-sunken);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+}
+
+.services-row--down {
+  border-left: 3px solid var(--danger);
+  background: color-mix(in srgb, var(--danger) 4%, transparent);
+}
+
+.services-row--probing { opacity: 0.6; }
+
+.services-row__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.services-row--up .services-row__status { color: var(--ok); }
+.services-row--down .services-row__status { color: var(--danger); }
+
+.services-row__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--r-pill);
+  background: var(--ink-faint);
+}
+
+.services-row--up .services-row__dot { background: var(--ok); }
+.services-row--down .services-row__dot { background: var(--danger); }
+
+.services-row__name {
+  display: grid;
+  font-weight: 650;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.services-row__name em {
+  font-style: normal;
+  font-weight: 400;
+  font-size: 10.5px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.services-row__addr {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.services-row__addr:hover { text-decoration: underline; }
+
+.services-row__addr--plain { color: var(--ink-soft); }
+
+.services-row__metric {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.services-row__metric i {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+
+.services-row__probed {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+/* 操作列：默认隐身，行悬停/聚焦时浮现（桌面管理页交互）。 */
+.services-row__ops {
+  display: inline-flex;
+  gap: 2px;
+  justify-self: end;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.services-row:hover .services-row__ops,
+.services-row:focus-within .services-row__ops {
+  opacity: 1;
+}
+
+.services-row--head .services-row__ops { opacity: 1; }
+
+.services-row__op {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.services-row__op:hover {
+  background: var(--paper);
+  color: var(--accent);
+}
+
+.services-row__op--danger:hover { color: var(--danger); }
+
+.services-row__op:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+/* ---- 表单 / 骨架 / 空行 ---- */
+
+.services-form {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--surface);
+  border-bottom: 1px dashed var(--line);
+}
+
+.services-rows > .services-form:last-child { border-bottom: none; }
+
+.services-form input {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--paper);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+}
+
+.services-form__ops {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.services-form__ops button {
+  min-height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--accent-soft);
+  border-radius: var(--r-sm);
+  background: var(--accent-wash);
+  color: var(--accent);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.services-form__ops button[type="button"] {
+  border-color: var(--line-strong);
+  background: none;
+  color: var(--ink-soft);
+}
+
+.services-form__ops button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.services-form__error {
+  font-size: 11px;
+  color: var(--danger);
+}
+
+/* 顶部添加态的表单独立成块 */
+section > .services-form {
+  margin-bottom: 10px;
+  border: 1px solid var(--accent-soft);
+  border-radius: var(--r-md);
+  grid-template-columns: 1fr 1.4fr 1fr auto;
+}
+
+.services-row-skeleton {
+  height: 38px;
+  border-bottom: 1px dashed var(--line);
+  background: linear-gradient(100deg, var(--surface-sunken) 40%, var(--shimmer-highlight) 50%, var(--surface-sunken) 60%);
+  background-size: 200% 100%;
+  animation: services-shimmer 1.4s ease-in-out infinite;
+}
+
+.services-row-skeleton:last-child { border-bottom: none; }
+
+@keyframes services-shimmer {
+  to { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .services-row-skeleton { animation: none; }
+  .services-row__ops { transition: none; opacity: 1; }
+}
+
+/* ---- 本机磁盘:卷卡(目录动态环形图 + 图例) ---- */
+
+.disks-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 12px;
+}
+
+.disk-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.disk-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.disk-card__title { display: grid; gap: 2px; min-width: 0; }
+
+.disk-card__title b {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.disk-card__title i {
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.disk-card__pct {
+  font-family: var(--font-mono);
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.disk-card__pct--ok { color: var(--ok); }
+.disk-card__pct--warn { color: var(--warn); }
+.disk-card__pct--danger { color: var(--danger); }
+
+.disk-card__viz {
+  display: grid;
+  grid-template-columns: 176px 1fr;
+  gap: 16px;
+  align-items: center;
+}
+
+.disk-card__chart { position: relative; aspect-ratio: 1; }
+
+.disk-card__center {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.disk-card__center b { font-family: var(--font-mono); font-size: 13px; font-weight: 650; }
+.disk-card__center i { font-style: normal; font-size: 9.5px; color: var(--ink-soft); }
+
+.disk-card__legend {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.disk-card__item {
+  display: grid;
+  grid-template-columns: 10px minmax(90px, 1fr) 72px 38px;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 6px;
+  border-radius: var(--r-sm);
+  font-size: 11.5px;
+}
+
+.disk-card__item--on { background: var(--paper); }
+
+.disk-card__swatch { width: 10px; height: 10px; border-radius: var(--r-pill); }
+
+.disk-card__name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.disk-card__size {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-soft);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.disk-card__pct2 {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-faint);
+  text-align: right;
+}
+
+.disk-card__hint {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--ink-soft);
+}
+
+.disk-card__hint--error { color: var(--danger); }
+
+.disk-card__foot {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--ink-faint);
+}
+
+
+.services-empty-line {
+  margin: 0;
+  padding: 18px 4px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}

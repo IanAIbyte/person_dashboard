@@ -2491,7 +2491,7 @@
 .social-archive-card__actions a {
   border-color: var(--ink);
   background: var(--ink);
-  color: white;
+  color: var(--on-accent);
 }
 
 .social-archive-card__actions svg {

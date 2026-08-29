@@ -148,9 +148,10 @@ test("builds a topic handoff without claiming it has been sent", () => {
 });
 
 test("keeps trend snapshots in a list and exposes local originals on detail", async () => {
-  const [pageSource, appSource, cssSource] = await Promise.all([
+  // 社媒洞察页面入口已按需求移除（App.jsx 不再注册路由），但页面组件与
+  // 后端保留，此测试继续锁定组件本身的溯源完整性。
+  const [pageSource, cssSource] = await Promise.all([
     readFile(new URL("../src/pages/SocialInsightsPage.jsx", import.meta.url), "utf8"),
-    readFile(new URL("../src/App.jsx", import.meta.url), "utf8"),
     readFile(new URL("../src/components/social-insights/social-insights.css", import.meta.url), "utf8"),
   ]);
 
@@ -168,6 +169,5 @@ test("keeps trend snapshots in a list and exposes local originals on detail", as
   assert.match(pageSource, />大家最近在聊什么<\/h2>/);
   assert.match(cssSource, /\.social-trend-editorial-hero \{[\s\S]*?background: transparent/);
   assert.doesNotMatch(pageSource, /<h1>{report\.title \|\| "未提供标题"}<\/h1>/);
-  assert.match(appSource, /path="\/social-insights\/trends\/:trendId"/);
   assert.doesNotMatch(pageSource, /function TrendReport\(/);
 });

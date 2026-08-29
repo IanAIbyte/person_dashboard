@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   IconArrowUpRight,
+  IconCheck,
   IconClock,
   IconExternalLink,
   IconEye,
@@ -9,7 +10,7 @@ import {
   IconStack2,
 } from "@tabler/icons-react";
 import { PageHeader } from "../components/PageHeader";
-import { loadDailyHot } from "../lib/api";
+import { countNewDailyHotItems, loadDailyHot } from "../lib/api";
 import { formatCompactDate, formatFullDate } from "../lib/format";
 import "../components/daily-hot/daily-hot.css";
 
@@ -128,11 +129,21 @@ function LoadingState() {
 export function DailyHotPage() {
   const [result, setResult] = useState({ data: null, source: "loading", error: null });
   const [refreshing, setRefreshing] = useState(false);
+  const [feedback, setFeedback] = useState(null);
+  const previousDataRef = useRef(null);
 
   const refresh = useCallback(async (force = false) => {
     setRefreshing(true);
+    if (force) setFeedback(null);
     try {
-      setResult(await loadDailyHot({ refresh: force }));
+      const next = await loadDailyHot({ refresh: force });
+      if (force) {
+        setFeedback({
+          newCount: countNewDailyHotItems(previousDataRef.current, next.data),
+        });
+      }
+      previousDataRef.current = next.data ?? null;
+      setResult(next);
     } finally {
       setRefreshing(false);
     }
@@ -141,6 +152,12 @@ export function DailyHotPage() {
   useEffect(() => {
     void refresh(false);
   }, [refresh]);
+
+  useEffect(() => {
+    if (!feedback) return undefined;
+    const timer = setTimeout(() => setFeedback(null), 3000);
+    return () => clearTimeout(timer);
+  }, [feedback]);
 
   const loading = result.source === "loading";
   const live = result.source === "live";
@@ -199,13 +216,20 @@ export function DailyHotPage() {
           </ExternalNewsLink>
         </div>
         <button
-          className="daily-hot-refresh"
+          aria-live="polite"
+          className={`daily-hot-refresh${feedback ? " daily-hot-refresh--done" : ""}`}
           disabled={refreshing}
           onClick={() => void refresh(true)}
           type="button"
         >
-          <IconRefresh aria-hidden="true" />
-          {refreshing ? "刷新中" : "刷新"}
+          {refreshing || !feedback ? <IconRefresh aria-hidden="true" /> : <IconCheck aria-hidden="true" />}
+          {refreshing
+            ? "刷新中"
+            : feedback
+              ? feedback.newCount > 0
+                ? `已更新 · 新增 ${feedback.newCount} 条`
+                : "已更新 · 暂无新增"
+              : "刷新"}
         </button>
       </div>
 

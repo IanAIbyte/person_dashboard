@@ -3,13 +3,14 @@ import { useEffect, useMemo, useState } from "react";
 function scopeForPath(pathname) {
   if (pathname === "/") return "overview";
   if (pathname.startsWith("/materials")) return "materials";
-  if (pathname.startsWith("/wiki")) return "wiki";
   if (pathname.startsWith("/graph")) return "graph";
   if (pathname.startsWith("/topics")) return "topics";
   if (pathname.startsWith("/content")) return "content";
   if (pathname.startsWith("/douyin")) return "douyin";
   if (pathname.startsWith("/social-insights")) return "social_insights";
+  if (pathname.startsWith("/stocks")) return "stocks";
   if (pathname.startsWith("/system")) return "runtime";
+  if (pathname.startsWith("/prompts")) return "prompts";
   return "overview";
 }
 

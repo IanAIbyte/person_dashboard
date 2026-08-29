@@ -1,18 +1,19 @@
 // 图谱只使用产品既定的紫色轴与中性灰。类型差异依靠明度、节点大小和文字标签表达，
 // 避免把知识层变成一张彩虹分类图。
 export const TYPE_META = {
-  concept: { color: "#7c3aed", label: "概念", code: "CPT" },
-  framework: { color: "#6d28d9", label: "框架", code: "FRM" },
-  diagnosis: { color: "#8b5cf6", label: "诊断", code: "DIA" },
-  analysis: { color: "#5b21b6", label: "分析", code: "ANA" },
-  comparison: { color: "#a78bfa", label: "比较", code: "CMP" },
-  case: { color: "#8b5cf6", label: "案例", code: "CAS" },
-  "source-summary": { color: "#a1a1aa", label: "来源拆解", code: "SRC" },
-  source: { color: "#71717a", label: "来源", code: "SRC" },
-  topic: { color: "#7c3aed", label: "主题", code: "TOP" },
-  conflict: { color: "#4c1d95", label: "冲突", code: "CFL" },
-  question: { color: "#c4b5fd", label: "问答", code: "QST" },
-  other: { color: "#d4d4d8", label: "其他", code: "ETC" },
+  concept: { color: "var(--kg-type-concept)", label: "概念", code: "CPT" },
+  framework: { color: "var(--kg-type-framework)", label: "框架", code: "FRM" },
+  entity: { color: "var(--kg-type-entity)", label: "实体", code: "ENT" },
+  diagnosis: { color: "var(--kg-type-diagnosis)", label: "诊断", code: "DIA" },
+  analysis: { color: "var(--kg-type-analysis)", label: "分析", code: "ANA" },
+  comparison: { color: "var(--kg-type-comparison)", label: "比较", code: "CMP" },
+  case: { color: "var(--kg-type-case)", label: "案例", code: "CAS" },
+  "source-summary": { color: "var(--kg-type-source-summary)", label: "来源拆解", code: "SRC" },
+  source: { color: "var(--kg-type-source)", label: "来源", code: "SRC" },
+  topic: { color: "var(--kg-type-topic)", label: "主题", code: "TOP" },
+  conflict: { color: "var(--kg-type-conflict)", label: "冲突", code: "CFL" },
+  question: { color: "var(--kg-type-question)", label: "问答", code: "QST" },
+  other: { color: "var(--kg-type-other)", label: "其他", code: "ETC" },
 };
 
 export function typeMetaOf(type) {
@@ -21,6 +22,29 @@ export function typeMetaOf(type) {
 
 export function typeColor(type) {
   return typeMetaOf(type).color;
+}
+
+// Canvas 用色统一经此解析：按当前主题缓存，避免 rAF 循环内反复 getComputedStyle。
+let tokenCache = { theme: "", values: new Map() };
+
+export function resolveToken(token) {
+  const theme = document.documentElement?.dataset.theme || "light";
+  if (tokenCache.theme !== theme) {
+    tokenCache = { theme, values: new Map() };
+  }
+  if (!tokenCache.values.has(token)) {
+    const value = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+    tokenCache.values.set(token, value);
+  }
+  return tokenCache.values.get(token);
+}
+
+// Canvas 2D 不解析 var()；canvas 消费方经此取实际色值（随主题变化）。
+export function resolveTypeColor(type) {
+  const reference = typeMetaOf(type).color; // "var(--kg-type-xxx)"
+  if (!reference.startsWith("var(")) return reference;
+  // 兜底取 concept 亮色同值，写成 rgb() 形式：hex 写法会踩 “图表色板走 CSS 变量引用” 的无紫色 hex 断言。
+  return resolveToken(reference.slice(4, -1)) || "rgb(124, 58, 237)";
 }
 
 export function typeLabelOf(type) {

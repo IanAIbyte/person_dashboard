@@ -31,7 +31,7 @@
   isolation: isolate;
   border: 1px solid var(--line);
   border-radius: 24px;
-  background-color: #fff;
+  background-color: var(--surface);
   box-shadow: 0 18px 55px rgba(10, 10, 10, 0.07), inset 0 0 0 1px rgba(255, 255, 255, 0.8);
 }
 
@@ -316,7 +316,7 @@
   padding: 6px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 24px 55px rgba(10, 10, 10, 0.14);
 }
 
@@ -504,7 +504,7 @@
   padding: 5px 8px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: #fff;
+  background: var(--surface);
   color: var(--ink-soft);
   font-size: 10px;
 }
@@ -566,7 +566,7 @@
   place-items: center;
   border-radius: 50%;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-size: 8px;
 }
 
@@ -628,7 +628,7 @@
   border: 1px solid var(--line);
   border-radius: 7px;
   color: var(--ink-faint);
-  background: #fff;
+  background: var(--surface);
   font-family: var(--font-mono);
   font-size: 8.5px;
 }
@@ -688,7 +688,7 @@
   border: 0;
   border-radius: 10px;
   background: var(--ink);
-  color: #fff;
+  color: var(--on-accent);
   font-size: 11px;
   font-weight: 600;
   transition: background 160ms var(--ease), transform 160ms var(--ease);
@@ -920,3 +920,13 @@
     transform: none;
   }
 }
+
+/* 暗色主题：覆盖面板族的白底 rgba（亮色值保持不变）。 */
+[data-theme="dark"] .knowledge-graph__controls { background: rgba(21, 28, 36, 0.96); }
+[data-theme="dark"] .graph-search-shell { background: rgba(21, 28, 36, 0.97); }
+[data-theme="dark"] .graph-overlay { background: rgba(21, 28, 36, 0.965); }
+[data-theme="dark"] .graph-stage__prompt { background: rgba(21, 28, 36, 0.84); }
+
+/* 暗色主题：constellation tooltip 反转为浅底（文字 --on-accent 两主题均可读）。 */
+[data-theme="dark"] .graph-tooltip.graph-tooltip--constellation { background: rgba(230, 237, 243, 0.94); }
+[data-theme="dark"] .graph-tooltip__type { color: var(--accent); }

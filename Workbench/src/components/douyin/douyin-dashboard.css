@@ -115,7 +115,7 @@
 }
 
 .dy-kpi--accent {
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
   border-color: var(--accent);
   box-shadow: var(--shadow-accent);
@@ -149,7 +149,7 @@
 }
 
 .dy-kpi--accent .dy-kpi__value {
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .dy-window-grid {
@@ -1273,7 +1273,7 @@ button.dy-sort:hover,
 
 .dy-content-link:hover {
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
 }
 
 .dy-content-script {
@@ -1814,3 +1814,8 @@ button.dy-sort:hover,
     animation-iteration-count: 1 !important;
   }
 }
+
+/* 暗色主题：tooltip 白底转暗（亮色值保持不变）。 */
+[data-theme="dark"] .dy-tooltip { background: rgba(21, 28, 36, 0.98); }
+[data-theme="dark"] .dy-kpi--accent .dy-kpi__label,
+[data-theme="dark"] .dy-kpi--accent .dy-kpi__hint { color: var(--on-accent); }
