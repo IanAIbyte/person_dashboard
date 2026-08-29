@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { IconCopy, IconSearch, IconSparkles, IconWand } from "@tabler/icons-react";
 import { PageHeader } from "../components/PageHeader";
+import { PromptCollectionPanel } from "../components/prompts/PromptCollectionPanel";
 import { optimizePrompt, saveCoachPrompt, searchPrompts, suggestPromptKeywords } from "../lib/api";
 import "./prompts-library.css";
 
@@ -17,6 +18,7 @@ const LANG_OPTIONS = [
 const noDash = (text) => (typeof text === "string" ? text.replace(/[—–]/g, "-") : text);
 
 export function PromptsLibraryPage() {
+  const [tab, setTab] = useState("mine"); // mine=我的收藏（默认） | public=公开模板
   const [query, setQuery] = useState("");
   const [lang, setLang] = useState("all");
   const [result, setResult] = useState({ items: [], total: 0, stats: null });
@@ -107,9 +109,32 @@ export function PromptsLibraryPage() {
       <PageHeader
         eyebrow="PROMPT LIBRARY"
         title="提示词"
-        description="检索公开提示词模板，找适合的打底，再结合自己的上下文修改。中文源 124 条 + 英文源 1.2 万条，本地缓存。"
+        description="「我的收藏」沉淀自己的提示词，与 Obsidian 知识库（10_raw/prompts/）双向同步；「公开模板」检索中文与英文模板库，找适合的打底再改。"
       />
 
+      <div className="prompts-tabs" role="tablist" aria-label="提示词库分区">
+        <button
+          aria-selected={tab === "mine"}
+          className={`prompts-tabs__btn${tab === "mine" ? " prompts-tabs__btn--on" : ""}`}
+          onClick={() => setTab("mine")}
+          role="tab"
+          type="button"
+        >
+          我的收藏
+        </button>
+        <button
+          aria-selected={tab === "public"}
+          className={`prompts-tabs__btn${tab === "public" ? " prompts-tabs__btn--on" : ""}`}
+          onClick={() => setTab("public")}
+          role="tab"
+          type="button"
+        >
+          公开模板
+        </button>
+      </div>
+
+      {tab === "mine" ? <PromptCollectionPanel /> : (
+        <>
       <div className="prompts-toolbar">
         <label className="prompts-search">
           <IconSearch aria-hidden="true" size={15} stroke={1.7} />
@@ -272,6 +297,8 @@ export function PromptsLibraryPage() {
           ) : null}
         </div>
       ) : null}
+        </>
+      )}
     </div>
   );
 }

@@ -792,6 +792,32 @@ export function optimizePrompt({ idea, template, context }) {
   });
 }
 
+// ---- 我的提示词收藏（vault 10_raw/prompts/，vault 为唯一数据源） ----
+
+export function loadPromptCollection() {
+  return request("/api/prompts/collection");
+}
+
+export async function createPromptItem(input) {
+  return request("/api/prompts/collection", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updatePromptItem(id, input) {
+  const params = new URLSearchParams({ id });
+  return request(`/api/prompts/collection?${params}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deletePromptItem(id) {
+  const params = new URLSearchParams({ id });
+  return request(`/api/prompts/collection?${params}`, { method: "DELETE" });
+}
+
 // ---- 云服务管理 ----
 
 export function loadServices() {
