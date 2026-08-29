@@ -105,8 +105,9 @@ test("getPortfolio computes values, weights and closed history", async () => {
   assert.equal(totals.cost, 16000);
   assert.equal(totals.pnl, 2000);
   assert.equal(totals.pnlPct, 12.5);
-  // 当日：18000 × 2% = 360。
-  assert.equal(totals.dayPnl, 360);
+  // 当日按「现价 − 昨收」× 股数：(60 − 60/1.02) × (200 + 100) = 352.94。
+  // 回归：不能用 市值×pct/100（=360），那会高估收益、低估亏损。
+  assert.equal(totals.dayPnl, 352.94);
   assert.equal(totals.maxWeight, 66.7);
   const first = portfolio.positions.find((item) => item.code === "688825");
   assert.equal(first.weight, 66.7);

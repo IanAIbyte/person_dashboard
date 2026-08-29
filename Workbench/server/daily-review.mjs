@@ -174,8 +174,9 @@ export function createDailyReviewService({
       const pnlPct = price != null && item.costPrice > 0
         ? Math.round(((price - item.costPrice) / item.costPrice) * 10000) / 100
         : null;
-      const dayPnl = marketValue != null && quote?.changePct != null
-        ? Math.round(marketValue * quote.changePct) / 100
+      // 当日盈亏按「现价 − 昨收」× 股数；市值×pct 会高估收益、低估亏损。
+      const dayPnl = price != null && quote?.prevClose != null
+        ? Math.round((price - quote.prevClose) * item.shares * 100) / 100
         : null;
       return {
         ...item,
