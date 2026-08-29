@@ -926,3 +926,7 @@
 [data-theme="dark"] .graph-search-shell { background: rgba(21, 28, 36, 0.97); }
 [data-theme="dark"] .graph-overlay { background: rgba(21, 28, 36, 0.965); }
 [data-theme="dark"] .graph-stage__prompt { background: rgba(21, 28, 36, 0.84); }
+
+/* 暗色主题：constellation tooltip 反转为浅底（文字 --on-accent 两主题均可读）。 */
+[data-theme="dark"] .graph-tooltip.graph-tooltip--constellation { background: rgba(230, 237, 243, 0.94); }
+[data-theme="dark"] .graph-tooltip__type { color: var(--accent); }
