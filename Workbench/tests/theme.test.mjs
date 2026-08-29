@@ -90,7 +90,10 @@ test("styles.css 组件区不再硬编码主题相关 hex", () => {
     .split("\n")
     .map((line) => (/#(?:[0-9a-fA-F]{6})\b/.test(line) ? line.trim() : null))
     .filter(Boolean)
-    .filter((line) => !line.includes("/* 主题无关装饰色 */"));
+    .filter(
+      (line) =>
+        !line.includes("/* 主题无关装饰色 */") && !line.includes("/* 固定深底白字 */"),
+    );
   assert.deepEqual(offenders, [], `组件区仍有 hex: ${offenders.slice(0, 5)}`);
 });
 

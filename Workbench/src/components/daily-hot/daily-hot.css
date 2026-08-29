@@ -547,7 +547,7 @@
   border: 1px solid var(--accent);
   border-radius: var(--r-sm);
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   font: inherit;
   font-size: 11px;
 }

@@ -3043,7 +3043,7 @@ h3 {
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: var(--r-pill);
   background: rgba(255, 255, 255, 0.08);
-  color: var(--on-accent);
+  color: #fff; /* 固定深底白字 */
   font-size: 12px;
   font-weight: 650;
 }
@@ -3495,7 +3495,7 @@ h3 {
   border: 0;
   border-radius: 5px;
   background: transparent;
-  color: var(--on-accent);
+  color: #fff; /* 固定深底白字 */
   font-size: 11px;
   font-weight: 650;
   white-space: nowrap;
