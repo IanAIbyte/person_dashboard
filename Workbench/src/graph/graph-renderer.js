@@ -1,4 +1,4 @@
-import { typeColor } from "../lib/graph.js";
+import { resolveTypeColor } from "../lib/graph.js";
 
 function roundedRect(ctx, x, y, width, height, radius) {
   const r = Math.min(radius, width / 2, height / 2);
@@ -72,7 +72,7 @@ function drawNode(ctx, frame, scale) {
   }
   ctx.beginPath();
   ctx.arc(x, y, radius, 0, Math.PI * 2);
-  ctx.fillStyle = typeColor(node.type);
+  ctx.fillStyle = resolveTypeColor(node.type);
   ctx.fill();
   ctx.lineWidth = (1.05 + frame.selectionWeight * 0.9) / scale;
   ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";

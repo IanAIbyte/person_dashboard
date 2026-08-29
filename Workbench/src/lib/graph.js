@@ -24,6 +24,16 @@ export function typeColor(type) {
   return typeMetaOf(type).color;
 }
 
+// Canvas 2D 不解析 var()；canvas 消费方经此取实际色值（随主题变化）。
+export function resolveTypeColor(type) {
+  const reference = typeMetaOf(type).color; // "var(--kg-type-xxx)"
+  if (!reference.startsWith("var(")) return reference;
+  const token = reference.slice(4, -1);
+  const value = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+  // 兜底取 concept 亮色同值，写成 rgb() 形式：hex 写法会踩 “图表色板走 CSS 变量引用” 的无紫色 hex 断言。
+  return value || "rgb(124, 58, 237)";
+}
+
 export function typeLabelOf(type) {
   return typeMetaOf(type).label;
 }
