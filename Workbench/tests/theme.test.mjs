@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveTheme, THEME_PREF_KEY } from "../src/lib/theme.js";
+import { relativeLuminance, contrastRatio } from "../scripts/theme-contrast.mjs";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -103,4 +104,14 @@ test("canvas 渲染器用 resolveTypeColor 解析主题色", () => {
   assert.ok(!renderer.includes("typeColor("), "canvas 内不得直接用 typeColor(var() 字符串)");
   const graph = readFileSync(join(process.cwd(), "src/lib/graph.js"), "utf8");
   assert.ok(graph.includes("export function resolveTypeColor"), "graph.js 应导出 resolveTypeColor");
+});
+
+test("暗色色板对比度达 AA", () => {
+  assert.ok(contrastRatio("#e6edf3", "#0f151b") >= 4.5);
+  assert.ok(contrastRatio("#9aa7b4", "#0f151b") >= 4.5);
+  assert.ok(contrastRatio("#7a8592", "#0f151b") >= 4.5);
+  assert.ok(contrastRatio("#7a8592", "#151c24") >= 4.5);
+  assert.ok(contrastRatio("#22d3ee", "#0f151b") >= 4.5);
+  assert.ok(contrastRatio("#08252b", "#22d3ee") >= 4.5);
+  assert.ok(contrastRatio("#f87171", "#0f151b") >= 4.5);
 });
