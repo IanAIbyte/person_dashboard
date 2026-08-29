@@ -6763,3 +6763,32 @@ h3 {
     white-space: nowrap;
   }
 }
+
+/* ============================================================
+   主题三态开关（侧栏底部）· 暗/系统/亮 分段控件
+   全 token 驱动，暗色主题随 data-theme 自动适配。
+   ============================================================ */
+.theme-toggle {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface-sunken);
+}
+.theme-toggle__btn {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 22px;
+  border: none;
+  border-radius: var(--r-pill);
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.theme-toggle__btn--on {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}

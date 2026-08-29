@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { Reorder } from "motion/react";
 import {
+  // 三态开关图标顺序（暗/系统/亮）受 tests/theme.test.mjs 源码断言约束，勿按字母序重排。
+  IconMoon,
+  IconDeviceDesktop,
+  IconSun,
   IconBooks,
   IconBriefcase,
   IconBulb,
@@ -18,6 +22,7 @@ import {
   IconSettings,
   IconTopologyStar3,
 } from "@tabler/icons-react";
+import { useTheme } from "../hooks/useTheme.js";
 
 const localWorkbench = import.meta.env.VITE_WORKBENCH_HOSTED !== "true";
 
@@ -88,6 +93,7 @@ export function AppShell({ children, onOpenSearch, sync }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [navItems, setNavItems] = useState(() => loadNavOrder(primaryNavigation));
   const [collapsed, setCollapsed] = useState(() => loadSidebarCollapsed());
+  const { pref, setPref } = useTheme();
 
   const handleNavReorder = (next) => {
     setNavItems(next);
@@ -212,6 +218,20 @@ export function AppShell({ children, onOpenSearch, sync }) {
         </div>
 
         <div className="sidebar__bottom">
+          <div className="theme-toggle" role="group" aria-label="主题">
+            <button type="button" className={`theme-toggle__btn${pref === "dark" ? " theme-toggle__btn--on" : ""}`}
+              aria-pressed={pref === "dark"} title="暗色" onClick={() => setPref("dark")}>
+              <IconMoon size={15} stroke={1.7} />
+            </button>
+            <button type="button" className={`theme-toggle__btn${pref === "system" ? " theme-toggle__btn--on" : ""}`}
+              aria-pressed={pref === "system"} title="跟随系统" onClick={() => setPref("system")}>
+              <IconDeviceDesktop size={15} stroke={1.7} />
+            </button>
+            <button type="button" className={`theme-toggle__btn${pref === "light" ? " theme-toggle__btn--on" : ""}`}
+              aria-pressed={pref === "light"} title="亮色" onClick={() => setPref("light")}>
+              <IconSun size={15} stroke={1.7} />
+            </button>
+          </div>
           <div className={`sidebar__sync sidebar__sync--${sync?.status || "connecting"}`}>
             <span aria-hidden="true" />
             <span>{sync?.status === "watching" ? "文件已实时同步" : sync?.status === "rebuilding" || sync?.status === "pending" ? "正在同步文件" : "正在连接文件同步"}</span>

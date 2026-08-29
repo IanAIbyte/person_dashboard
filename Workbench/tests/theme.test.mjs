@@ -39,3 +39,21 @@ test("styles.css 定义暗色 token 覆盖块与新 token", () => {
   assert.ok(dark.includes("--disk-c1:"), "dark 块应含磁盘色板");
   assert.ok(css.includes("--on-accent"), ":root 应定义 --on-accent 亮色值");
 });
+
+test("useTheme hook 存在且写入 dataset + matchMedia 监听", () => {
+  const hook = readFileSync(join(process.cwd(), "src/hooks/useTheme.js"), "utf8");
+  assert.ok(hook.includes("addEventListener"), "应监听 matchMedia change");
+  assert.ok(hook.includes("dataset.theme"), "应写 document.documentElement.dataset.theme");
+  assert.ok(hook.includes("resolveTheme"), "应复用 resolveTheme");
+});
+
+test("AppShell 渲染三态开关且顺序为 暗/系统/亮", () => {
+  const shell = readFileSync(join(process.cwd(), "src/components/AppShell.jsx"), "utf8");
+  assert.ok(shell.includes("useTheme"), "AppShell 应消费 useTheme");
+  const moon = shell.indexOf("IconMoon");
+  const monitor = shell.indexOf("IconDeviceDesktop");
+  const sun = shell.indexOf("IconSun");
+  assert.ok(moon > -1 && monitor > -1 && sun > -1, "三个图标都要有");
+  assert.ok(moon < monitor && monitor < sun, "顺序必须 暗/系统/亮");
+  assert.ok(shell.includes("aria-pressed"), "当前态要 aria-pressed");
+});
