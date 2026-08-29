@@ -105,8 +105,9 @@ export function invalidateCache(prefix = null) {
 }
 
 export function loadOverview() {
-  // ttl 45s：短于页面的 60s 轮询，轮询仍能拿到真数据；二次进入秒出缓存。
-  return withFallback(() => cachedGet("/api/overview", 45_000), fallbackOverview);
+  // 60s 轮询必须每次拿到当轮数据：cachedGet 的陈旧分支会先回上一轮快照，
+  // 让轮询永远慢一拍，所以总览不走缓存（二次进入的"秒出"由服务端承担）。
+  return withFallback(() => request("/api/overview"), fallbackOverview);
 }
 
 let dailyHotLoader = null;
@@ -825,18 +826,29 @@ export function loadServices() {
 }
 
 export function addService({ name, url, note }) {
-  return request("/api/services", { method: "POST", body: JSON.stringify({ name, url, note }) });
+  return request("/api/services", { method: "POST", body: JSON.stringify({ name, url, note }) })
+    .then((data) => {
+      invalidateCache("/api/services");
+      return data;
+    });
 }
 
 export function updateService(id, { name, url, note }) {
   return request(`/api/services/${encodeURIComponent(id)}`, {
     method: "PUT",
     body: JSON.stringify({ name, url, note }),
+  }).then((data) => {
+    invalidateCache("/api/services");
+    return data;
   });
 }
 
 export function removeService(id) {
-  return request(`/api/services/${encodeURIComponent(id)}`, { method: "DELETE" });
+  return request(`/api/services/${encodeURIComponent(id)}`, { method: "DELETE" })
+    .then((data) => {
+      invalidateCache("/api/services");
+      return data;
+    });
 }
 
 export function probeService(id) {
