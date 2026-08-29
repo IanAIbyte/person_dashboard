@@ -24,14 +24,27 @@ export function typeColor(type) {
   return typeMetaOf(type).color;
 }
 
+// Canvas 用色统一经此解析：按当前主题缓存，避免 rAF 循环内反复 getComputedStyle。
+let tokenCache = { theme: "", values: new Map() };
+
+export function resolveToken(token) {
+  const theme = document.documentElement?.dataset.theme || "light";
+  if (tokenCache.theme !== theme) {
+    tokenCache = { theme, values: new Map() };
+  }
+  if (!tokenCache.values.has(token)) {
+    const value = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+    tokenCache.values.set(token, value);
+  }
+  return tokenCache.values.get(token);
+}
+
 // Canvas 2D 不解析 var()；canvas 消费方经此取实际色值（随主题变化）。
 export function resolveTypeColor(type) {
   const reference = typeMetaOf(type).color; // "var(--kg-type-xxx)"
   if (!reference.startsWith("var(")) return reference;
-  const token = reference.slice(4, -1);
-  const value = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
   // 兜底取 concept 亮色同值，写成 rgb() 形式：hex 写法会踩 “图表色板走 CSS 变量引用” 的无紫色 hex 断言。
-  return value || "rgb(124, 58, 237)";
+  return resolveToken(reference.slice(4, -1)) || "rgb(124, 58, 237)";
 }
 
 export function typeLabelOf(type) {
