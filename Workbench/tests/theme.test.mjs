@@ -115,3 +115,14 @@ test("暗色色板对比度达 AA", () => {
   assert.ok(contrastRatio("#08252b", "#22d3ee") >= 4.5);
   assert.ok(contrastRatio("#f87171", "#0f151b") >= 4.5);
 });
+
+test("星图面板族与抖音 tooltip 有暗色白底覆盖", () => {
+  const kg = readFileSync(join(process.cwd(), "src/styles/knowledge-graph.css"), "utf8");
+  for (const selector of ["[data-theme=\"dark\"] .knowledge-graph__controls",
+    "[data-theme=\"dark\"] .graph-search-shell", "[data-theme=\"dark\"] .graph-overlay",
+    "[data-theme=\"dark\"] .graph-stage__prompt"]) {
+    assert.ok(kg.includes(selector), `knowledge-graph.css 缺少 ${selector}`);
+  }
+  const dy = readFileSync(join(process.cwd(), "src/components/douyin/douyin-dashboard.css"), "utf8");
+  assert.ok(dy.includes("[data-theme=\"dark\"] .dy-tooltip"), "douyin-dashboard.css 缺少 tooltip 暗色覆盖");
+});

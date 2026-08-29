@@ -920,3 +920,9 @@
     transform: none;
   }
 }
+
+/* 暗色主题：覆盖面板族的白底 rgba（亮色值保持不变）。 */
+[data-theme="dark"] .knowledge-graph__controls { background: rgba(21, 28, 36, 0.96); }
+[data-theme="dark"] .graph-search-shell { background: rgba(21, 28, 36, 0.97); }
+[data-theme="dark"] .graph-overlay { background: rgba(21, 28, 36, 0.965); }
+[data-theme="dark"] .graph-stage__prompt { background: rgba(21, 28, 36, 0.84); }

@@ -1814,3 +1814,8 @@ button.dy-sort:hover,
     animation-iteration-count: 1 !important;
   }
 }
+
+/* 暗色主题：tooltip 白底转暗（亮色值保持不变）。 */
+[data-theme="dark"] .dy-tooltip { background: rgba(21, 28, 36, 0.98); }
+[data-theme="dark"] .dy-kpi--accent .dy-kpi__label,
+[data-theme="dark"] .dy-kpi--accent .dy-kpi__hint { color: var(--on-accent); }
