@@ -31,6 +31,7 @@ export function PromptsLibraryPage() {
   const debounceRef = useRef(0);
 
   useEffect(() => {
+    if (tab !== "public") return; // 我的收藏 tab 不消耗公开库检索配额
     window.clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(async () => {
       setLoading(true);
@@ -47,7 +48,7 @@ export function PromptsLibraryPage() {
       }
     }, 250);
     return () => window.clearTimeout(debounceRef.current);
-  }, [query, lang]);
+  }, [query, lang, tab]);
 
   const copy = async (index) => {
     const item = result.items[index];

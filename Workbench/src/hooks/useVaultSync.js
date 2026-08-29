@@ -10,6 +10,7 @@ function scopeForPath(pathname) {
   if (pathname.startsWith("/social-insights")) return "social_insights";
   if (pathname.startsWith("/stocks")) return "stocks";
   if (pathname.startsWith("/system")) return "runtime";
+  if (pathname.startsWith("/prompts")) return "prompts";
   return "overview";
 }
 

@@ -62,7 +62,7 @@ createPromptCollectionRepository({ vaultRoot })
 - 校验上限：title ≤ 200 字；content ≤ 20000 字（同 coach-prompt）；tags ≤ 20 个、每个 ≤ 32 字；source 必须为 http(s) URL 或空。
 - 安全：目录逐段 mkdir + realpath symlink 逃逸检查（照抄 coach-prompt `safeStorePath`）；`update/remove` 的 id 做 `isPathInside` 越界校验，防路径穿越。
 - 原子写：`.tmp`（`wx` + 0o600）+ `rename`，finally 清理临时文件。
-- 错误：`PromptCollectionError(code, message)`，码含 `INVALID_TITLE` / `INVALID_CONTENT` / `INVALID_TAG` / `INVALID_SOURCE` / `PROMPT_NOT_FOUND` / `UNSAFE_PATH` / `INVALID_VAULT`，经既有 `errorStatus`/`errorPayload` 映射 HTTP 状态。
+- 错误：`PromptCollectionError(code, message)`，码含 `INVALID_PROMPT_ID` / `PROMPT_NOT_FOUND` / `INVALID_TITLE` / `INVALID_CONTENT` / `INVALID_TAG` / `INVALID_SOURCE` / `INVALID_PROMPT_REQUEST` / `TOO_MANY_PROMPTS` / `PROMPT_FILE_NAME_EXHAUSTED` / `UNSAFE_PROMPTS_DIRECTORY` / `SYMLINK_ESCAPE` / `INVALID_VAULT`，经既有 `errorStatus`/`errorPayload` 映射 HTTP 状态。
 
 **端点（挂 `vite-plugin-workbench.mjs`，遵循现有约定）：**
 

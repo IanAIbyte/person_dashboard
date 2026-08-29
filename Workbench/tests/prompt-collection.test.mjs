@@ -9,6 +9,7 @@ import {
   PromptCollectionError,
   createPromptCollectionRepository,
 } from "../server/prompt-collection.mjs";
+import { formatShanghaiDate } from "../server/security.mjs";
 import http from "node:http";
 import { createServer as createViteServer } from "vite";
 import { workbenchApiPlugin } from "../server/vite-plugin-workbench.mjs";
@@ -281,7 +282,7 @@ test("API 冒烟：GET 空列表 → POST 创建 → PATCH 更新 → DELETE 删
   });
   assert.equal(created.status, 200);
   const item = await created.json();
-  assert.equal(item.id, "10_raw/prompts/" + String(new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" })) + "-接口冒烟.md");
+  assert.equal(item.id, "10_raw/prompts/" + formatShanghaiDate(new Date()) + "-接口冒烟.md");
 
   const updated = await fetch(
     `${origin}/api/prompts/collection?${new URLSearchParams({ id: item.id })}`,
