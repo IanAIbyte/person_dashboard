@@ -162,21 +162,9 @@ function humanSize(kb) {
 }
 
 // 卷卡：目录分析自动启动（du 流式），形态 = 单环多段动态环形图 + 右侧圆点图例。
-// 分类色板（避开 danger 红，目录无好坏语义）：超出循环取用。
+// 分类色板（避开 danger 红，目录无好坏语义）：引用 styles.css token，超出循环取用。
 const DIR_SLICE_LIMIT = 10;
-const DIR_COLORS = [
-  "#0ea5e9", // 天蓝
-  "#8b5cf6", // 紫
-  "#f59e0b", // 琥珀
-  "#10b981", // 翠绿
-  "#ec4899", // 粉
-  "#14b8a6", // 青
-  "#6366f1", // 靛
-  "#f97316", // 橙
-  "#06b6d4", // 深青
-  "#a855f7", // 亮紫
-  "#94a3b8", // 其他：中性灰
-];
+const DIR_COLORS = Array.from({ length: 11 }, (_, i) => `var(--disk-c${i + 1})`);
 
 function DiskCard({ disk }) {
   const [state, setState] = useState(null);

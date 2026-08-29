@@ -57,3 +57,12 @@ test("AppShell 渲染三态开关且顺序为 暗/系统/亮", () => {
   assert.ok(moon < monitor && monitor < sun, "顺序必须 暗/系统/亮");
   assert.ok(shell.includes("aria-pressed"), "当前态要 aria-pressed");
 });
+
+test("图表色板走 CSS 变量引用", () => {
+  const graph = readFileSync(join(process.cwd(), "src/lib/graph.js"), "utf8");
+  assert.ok(graph.includes('color: "var(--kg-type-concept)"'), "concept 色应引用 token");
+  assert.ok(!/#7c3aed|#6d28d9|#5b21b6/.test(graph), "不应再有紫色 hex 常量");
+  const services = readFileSync(join(process.cwd(), "src/pages/ServicesPage.jsx"), "utf8");
+  assert.ok(services.includes("var(--disk-c"), "磁盘色板应引用 token");
+  assert.ok(!/#0ea5e9|#8b5cf6/.test(services), "ServicesPage 不应再有DIR_COLORS hex");
+});

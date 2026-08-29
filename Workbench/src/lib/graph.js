@@ -1,19 +1,19 @@
 // 图谱只使用产品既定的紫色轴与中性灰。类型差异依靠明度、节点大小和文字标签表达，
 // 避免把知识层变成一张彩虹分类图。
 export const TYPE_META = {
-  concept: { color: "#7c3aed", label: "概念", code: "CPT" },
-  framework: { color: "#6d28d9", label: "框架", code: "FRM" },
-  entity: { color: "#7c3aed", label: "实体", code: "ENT" },
-  diagnosis: { color: "#8b5cf6", label: "诊断", code: "DIA" },
-  analysis: { color: "#5b21b6", label: "分析", code: "ANA" },
-  comparison: { color: "#a78bfa", label: "比较", code: "CMP" },
-  case: { color: "#8b5cf6", label: "案例", code: "CAS" },
-  "source-summary": { color: "#a1a1aa", label: "来源拆解", code: "SRC" },
-  source: { color: "#71717a", label: "来源", code: "SRC" },
-  topic: { color: "#7c3aed", label: "主题", code: "TOP" },
-  conflict: { color: "#4c1d95", label: "冲突", code: "CFL" },
-  question: { color: "#c4b5fd", label: "问答", code: "QST" },
-  other: { color: "#d4d4d8", label: "其他", code: "ETC" },
+  concept: { color: "var(--kg-type-concept)", label: "概念", code: "CPT" },
+  framework: { color: "var(--kg-type-framework)", label: "框架", code: "FRM" },
+  entity: { color: "var(--kg-type-entity)", label: "实体", code: "ENT" },
+  diagnosis: { color: "var(--kg-type-diagnosis)", label: "诊断", code: "DIA" },
+  analysis: { color: "var(--kg-type-analysis)", label: "分析", code: "ANA" },
+  comparison: { color: "var(--kg-type-comparison)", label: "比较", code: "CMP" },
+  case: { color: "var(--kg-type-case)", label: "案例", code: "CAS" },
+  "source-summary": { color: "var(--kg-type-source-summary)", label: "来源拆解", code: "SRC" },
+  source: { color: "var(--kg-type-source)", label: "来源", code: "SRC" },
+  topic: { color: "var(--kg-type-topic)", label: "主题", code: "TOP" },
+  conflict: { color: "var(--kg-type-conflict)", label: "冲突", code: "CFL" },
+  question: { color: "var(--kg-type-question)", label: "问答", code: "QST" },
+  other: { color: "var(--kg-type-other)", label: "其他", code: "ETC" },
 };
 
 export function typeMetaOf(type) {
