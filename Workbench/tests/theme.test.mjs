@@ -80,6 +80,20 @@ test("组件 CSS 不再硬编码亮色专用值", () => {
   }
 });
 
+test("styles.css 组件区不再硬编码主题相关 hex", () => {
+  const css = readFileSync(join(process.cwd(), "src/styles.css"), "utf8");
+  // 组件样式位于暗色块之后（:root 原/追加块与 dark 块都豁免）。
+  const darkStart = css.indexOf('[data-theme="dark"]');
+  const darkEnd = css.indexOf("\n}", darkStart);
+  const componentArea = css.slice(darkEnd + 2);
+  const offenders = componentArea
+    .split("\n")
+    .map((line) => (/#(?:[0-9a-fA-F]{6})\b/.test(line) ? line.trim() : null))
+    .filter(Boolean)
+    .filter((line) => !line.includes("/* 主题无关装饰色 */"));
+  assert.deepEqual(offenders, [], `组件区仍有 hex: ${offenders.slice(0, 5)}`);
+});
+
 test("canvas 渲染器用 resolveTypeColor 解析主题色", () => {
   const renderer = readFileSync(join(process.cwd(), "src/graph/graph-renderer.js"), "utf8");
   assert.ok(renderer.includes("resolveTypeColor"), "canvas fillStyle 必须经 resolveTypeColor 解析");

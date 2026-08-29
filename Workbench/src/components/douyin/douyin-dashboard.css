@@ -1273,7 +1273,7 @@ button.dy-sort:hover,
 
 .dy-content-link:hover {
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
 }
 
 .dy-content-script {
