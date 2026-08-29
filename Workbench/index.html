@@ -12,15 +12,16 @@
     <script>
       // 防白闪：CSS 加载前解析主题（与 src/lib/theme.js 的键名/解析规则保持一致）。
       (function () {
+        var systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
         try {
           var stored = localStorage.getItem("theme-pref");
           var valid = stored === "light" || stored === "dark" || stored === "system";
           var pref = valid ? stored : "system";
-          var systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
           var theme = pref === "system" ? (systemDark ? "dark" : "light") : pref;
           document.documentElement.setAttribute("data-theme", theme);
         } catch (e) {
-          document.documentElement.setAttribute("data-theme", "light");
+          // 与 readThemePref 的兜底一致：存储不可用时按 system 解析，而非钉死 light。
+          document.documentElement.setAttribute("data-theme", systemDark ? "dark" : "light");
         }
       })();
     </script>
