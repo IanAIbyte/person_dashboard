@@ -104,16 +104,46 @@ test("canvas 渲染器用 resolveTypeColor 解析主题色", () => {
   assert.ok(!renderer.includes("typeColor("), "canvas 内不得直接用 typeColor(var() 字符串)");
   const graph = readFileSync(join(process.cwd(), "src/lib/graph.js"), "utf8");
   assert.ok(graph.includes("export function resolveTypeColor"), "graph.js 应导出 resolveTypeColor");
+  assert.ok(graph.includes("export function resolveToken"), "graph.js 应导出 resolveToken");
 });
 
-test("暗色色板对比度达 AA", () => {
-  assert.ok(contrastRatio("#e6edf3", "#0f151b") >= 4.5);
-  assert.ok(contrastRatio("#9aa7b4", "#0f151b") >= 4.5);
-  assert.ok(contrastRatio("#7a8592", "#0f151b") >= 4.5);
-  assert.ok(contrastRatio("#7a8592", "#151c24") >= 4.5);
-  assert.ok(contrastRatio("#22d3ee", "#0f151b") >= 4.5);
-  assert.ok(contrastRatio("#08252b", "#22d3ee") >= 4.5);
-  assert.ok(contrastRatio("#f87171", "#0f151b") >= 4.5);
+test("canvas 渲染器不再写死亮色底值且经 resolveToken 取主题色", () => {
+  const renderer = readFileSync(join(process.cwd(), "src/graph/graph-renderer.js"), "utf8");
+  assert.ok(!renderer.includes("rgba(255, 255, 255, 0.96)"), "标签 halo 不应写死白色");
+  assert.ok(!renderer.includes("rgba(255, 255, 255, 0.97)"), "选中标签卡不应写死白色");
+  assert.ok(!renderer.includes("rgba(255, 255, 255, 0.92)"), "节点描边不应写死白色");
+  assert.ok(!/rgba\(255,\s*255,\s*255/.test(renderer), "canvas 不应残留任何白色 rgba 字面量");
+  assert.ok(!/#[0-9a-fA-F]{6}\b/.test(renderer), "canvas 渲染器不应含 hex 字面量");
+  assert.ok(renderer.includes("resolveToken("), "canvas 用色应经 resolveToken 按主题解析");
+});
+
+test("暗色色板对比度达 AA（值读自 styles.css 暗色块）", () => {
+  const css = readFileSync(join(process.cwd(), "src/styles.css"), "utf8");
+  const darkStart = css.indexOf('[data-theme="dark"]');
+  assert.ok(darkStart > -1, "styles.css 应有暗色覆盖块");
+  const dark = css.slice(darkStart, css.indexOf("\n}", darkStart));
+  // 值而非名字：token 或 hex 缺失即失败，不允许静默跳过。
+  const readToken = (name) => {
+    const match = dark.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})\\s*;`));
+    assert.ok(match, `暗色块缺少可解析的 --${name} hex 值`);
+    return match[1];
+  };
+  const paper = readToken("paper");
+  const surface = readToken("surface");
+  const ink = readToken("ink");
+  const inkSoft = readToken("ink-soft");
+  const inkFaint = readToken("ink-faint");
+  const accent = readToken("accent");
+  const onAccent = readToken("on-accent");
+  const danger = readToken("danger");
+
+  assert.ok(contrastRatio(ink, paper) >= 4.5);
+  assert.ok(contrastRatio(inkSoft, paper) >= 4.5);
+  assert.ok(contrastRatio(inkFaint, paper) >= 4.5);
+  assert.ok(contrastRatio(inkFaint, surface) >= 4.5);
+  assert.ok(contrastRatio(accent, paper) >= 4.5);
+  assert.ok(contrastRatio(onAccent, accent) >= 4.5);
+  assert.ok(contrastRatio(danger, paper) >= 4.5);
 });
 
 test("星图面板族与抖音 tooltip 有暗色白底覆盖", () => {
