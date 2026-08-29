@@ -256,6 +256,17 @@ function errorStatus(error) {
     ["JOB_NOT_FOUND", "DOCUMENT_NOT_FOUND", "READER_EXPLANATION_NOT_FOUND"].includes(code) ||
     code?.endsWith("_NOT_FOUND")
   ) return 404;
+  // 容量上限与重复冲突：客户端可修复（删几条/改名），409 而非 500。
+  if (
+    [
+      "TOO_MANY_POSITIONS",
+      "TOO_MANY_PROMPTS",
+      "TOO_MANY_STOCK_CODES",
+      "TOO_MANY_STOCK_WATCHLIST_ITEMS",
+      "PROMPT_FILE_NAME_EXHAUSTED",
+      "STOCK_POOL_DUPLICATE",
+    ].includes(code)
+  ) return 409;
   if (
     [
       "CONCURRENCY_LIMIT",

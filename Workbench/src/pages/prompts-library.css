@@ -328,9 +328,10 @@
   cursor: pointer;
 }
 
-.prompts-optimizer__apply {
-  border-color: var(--accent-soft) !important;
-  color: var(--accent) !important;
+/* 比上面的 .prompts-optimizer__ops button 更高特异性，覆盖边框/文字色。 */
+.prompts-optimizer__ops .prompts-optimizer__apply {
+  border-color: var(--accent-soft);
+  color: var(--accent);
 }
 
 /* 检索骨架：与结果卡同形的 shimmer 占位（prefers-reduced-motion 下静止）。 */
