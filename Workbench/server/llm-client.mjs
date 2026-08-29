@@ -71,7 +71,6 @@ export function createLlmClient({
       ? callTimeoutMs
       : timeoutMs;
 
-    let lastError;
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), effectiveTimeoutMs);
@@ -97,10 +96,7 @@ export function createLlmClient({
             { status, body: text.slice(0, 400) },
           );
           // 仅 429/5xx 可重试；4xx（密钥/参数错误）是确定性失败，重试只会重复计费。
-          if (attempt < maxRetries && (status === 429 || status >= 500)) {
-            lastError = error;
-            continue;
-          }
+          if (attempt < maxRetries && (status === 429 || status >= 500)) continue;
           throw error;
         }
         const content = await readStreamContent(response);
@@ -113,17 +109,14 @@ export function createLlmClient({
           throw error;
         }
         // 网络错误 / 超时可重试。
-        if (attempt < maxRetries) {
-          lastError = new LlmClientError("LLM_REQUEST_FAILED", error?.message || "LLM 请求失败。");
-          continue;
-        }
+        if (attempt < maxRetries) continue;
         throw new LlmClientError("LLM_REQUEST_FAILED", error?.message || "LLM 请求失败。");
       } finally {
         clearTimeout(timer);
         signal?.removeEventListener?.("abort", abortHandler);
       }
     }
-    throw lastError;
+    throw new LlmClientError("LLM_REQUEST_FAILED", "LLM 请求失败。");
   }
 
   // 便捷方法：要求返回 JSON，自动去围栏并解析；解析失败抛 LLM_INVALID_JSON。
