@@ -100,7 +100,7 @@ export function createDisksMonitor({ execImpl = execFileAsync, statePath = null,
     try {
       const state = JSON.parse(await readFile(statePath, "utf8"));
       if (state?.day !== dayKey()) return; // 非当天快照视为过期，等第一次刷新重建
-      if (state.list?.checkedAt) listCache = { result: state.list, at: Date.now() };
+      if (state.list?.checkedAt) listCache = { result: state.list, at: nowImpl().getTime() };
       for (const [mount, entry] of Object.entries(state.dirs ?? {})) {
         if (entry?.status === "done") dirAnalyses.set(mount, entry);
       }
@@ -177,7 +177,7 @@ export function createDisksMonitor({ execImpl = execFileAsync, statePath = null,
         usedGb: gb(parsed.reduce((sum, disk) => sum + disk.usedKb, 0)),
         items,
       };
-      listCache = { result, at: Date.now() };
+      listCache = { result, at: nowImpl().getTime() };
       await persist(); // 落定后再返回，保证"重启后当天复用"始终成立
       return result;
     },
