@@ -67,6 +67,19 @@ test("图表色板走 CSS 变量引用", () => {
   assert.ok(!/#0ea5e9|#8b5cf6/.test(services), "ServicesPage 不应再有DIR_COLORS hex");
 });
 
+test("组件 CSS 不再硬编码亮色专用值", () => {
+  const cases = [
+    ["src/components/watchlist/watchlist.css"],
+    ["src/components/reader/reader-explanation.css"],
+    ["src/styles/knowledge-graph.css"],
+    ["src/pages/services.css"],
+  ];
+  for (const [file] of cases) {
+    const css = readFileSync(join(process.cwd(), file), "utf8");
+    assert.ok(!/#[0-9a-fA-F]{6}\b/.test(css), `${file} 仍含 hex 色值`);
+  }
+});
+
 test("canvas 渲染器用 resolveTypeColor 解析主题色", () => {
   const renderer = readFileSync(join(process.cwd(), "src/graph/graph-renderer.js"), "utf8");
   assert.ok(renderer.includes("resolveTypeColor"), "canvas fillStyle 必须经 resolveTypeColor 解析");

@@ -284,7 +284,7 @@
   border: none;
   border-radius: var(--r-sm);
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-size: 12px;
   cursor: pointer;
 }
@@ -346,7 +346,7 @@
   height: 12px;
   margin: 10px 0;
   border-radius: 4px;
-  background: linear-gradient(100deg, var(--surface-sunken) 40%, #e9e9ec 50%, var(--surface-sunken) 60%);
+  background: linear-gradient(100deg, var(--surface-sunken) 40%, var(--shimmer-highlight) 50%, var(--surface-sunken) 60%);
   background-size: 200% 100%;
   animation: prompts-shimmer 1.4s ease-in-out infinite;
 }

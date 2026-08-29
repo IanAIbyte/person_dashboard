@@ -115,7 +115,7 @@
 }
 
 .dot-eye__pupil {
-  background: #24103f;
+  background: #24103f; /* 主题无关装饰色 */
   border-radius: 50%;
   height: 42%;
   width: 42%;
