@@ -3,6 +3,12 @@ Workbench/dist/
 qa/
 .DS_Store
 
+# Tool-generated artifacts (browser QA logs/screenshots, auto-generated graphs, agent state).
+.playwright-mcp/
+tab-review.png
+.terse/
+.zcode/
+
 # Local environment and credential files. Keep sanitized examples trackable.
 .env
 .env.*
@@ -29,5 +35,6 @@ secrets.*.json
 *.log
 
 Workbench/config/attention.local.json
+Workbench/config/daily-review.local.json
 个人知识库/10_raw/my-thoughts/reading-notes/*
 !个人知识库/10_raw/my-thoughts/reading-notes/.gitkeep

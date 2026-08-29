@@ -1,21 +1,22 @@
 import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
+import { Reorder } from "motion/react";
 import {
-  IconBrandTiktok,
   IconBooks,
+  IconBriefcase,
   IconBulb,
-  IconClipboardList,
+  IconServer2,
+  IconSparkles,
+  IconChartCandle,
+  IconChevronLeft,
+  IconChevronRight,
   IconCommand,
   IconHome,
-  IconLibrary,
   IconMenu2,
   IconRadar2,
   IconSearch,
   IconSettings,
-  IconSocial,
-  IconStack2,
   IconTopologyStar3,
-  IconX,
 } from "@tabler/icons-react";
 
 const localWorkbench = import.meta.env.VITE_WORKBENCH_HOSTED !== "true";
@@ -23,20 +24,83 @@ const localWorkbench = import.meta.env.VITE_WORKBENCH_HOSTED !== "true";
 const primaryNavigation = [
   { to: "/", label: "总览", icon: IconHome, end: true },
   { to: "/graph", label: "知识星图", icon: IconTopologyStar3 },
-  { to: "/wiki", label: "Wiki 层", icon: IconLibrary },
-  { to: "/materials", label: "素材层", icon: IconStack2 },
   { to: "/books", label: "书架", icon: IconBooks },
   { to: "/daily-hot", label: "每日热点", icon: IconRadar2 },
   ...(localWorkbench
-    ? [{ to: "/social-insights", label: "社媒洞察", icon: IconSocial }]
+    ? [{ to: "/career", label: "求职备战", icon: IconBriefcase }]
+    : []),
+  ...(localWorkbench
+    ? [{ to: "/stocks", label: "每日复盘", icon: IconChartCandle }]
+    : []),
+  ...(localWorkbench
+    ? [{ to: "/services", label: "服务", icon: IconServer2 }]
     : []),
   { to: "/topics", label: "灵感库", icon: IconBulb },
-  { to: "/content", label: "内容中心", icon: IconClipboardList },
-  { to: "/douyin", label: "抖音数据", icon: IconBrandTiktok },
+  { to: "/prompts", label: "提示词", icon: IconSparkles },
 ];
+
+// 导航顺序持久化：存路由数组，恢复时按序重排；未记录的新增项保持默认顺序追加。
+const NAV_ORDER_KEY = "workbench.nav-order.v1";
+
+function loadNavOrder(defaults) {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(NAV_ORDER_KEY));
+    if (!Array.isArray(saved)) return defaults;
+    const byRoute = new Map(defaults.map((item) => [item.to, item]));
+    const ordered = saved
+      .filter((to) => byRoute.has(to))
+      .map((to) => byRoute.get(to));
+    const rest = defaults.filter((item) => !saved.includes(item.to));
+    return ordered.length ? [...ordered, ...rest] : defaults;
+  } catch {
+    return defaults;
+  }
+}
+
+function saveNavOrder(items) {
+  try {
+    window.localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(items.map((i) => i.to)));
+  } catch {
+    // 隐私模式等场景写入失败时静默降级，仅本次会话内保持顺序。
+  }
+}
+
+// 侧栏收缩状态持久化（仅桌面端语义；移动端抽屉不受影响）。
+const SIDEBAR_COLLAPSED_KEY = "workbench.sidebar-collapsed.v1";
+
+function loadSidebarCollapsed() {
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function saveSidebarCollapsed(collapsed) {
+  try {
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
+  } catch {
+    // 写入失败时静默降级。
+  }
+}
 
 export function AppShell({ children, onOpenSearch, sync }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [navItems, setNavItems] = useState(() => loadNavOrder(primaryNavigation));
+  const [collapsed, setCollapsed] = useState(() => loadSidebarCollapsed());
+
+  const handleNavReorder = (next) => {
+    setNavItems(next);
+    saveNavOrder(next);
+  };
+
+  const toggleCollapsed = () => {
+    setCollapsed((current) => {
+      const next = !current;
+      saveSidebarCollapsed(next);
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!mobileOpen) return undefined;
@@ -48,7 +112,7 @@ export function AppShell({ children, onOpenSearch, sync }) {
   }, [mobileOpen]);
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${collapsed ? " app-shell--sidebar-collapsed" : ""}`}>
       <header className="mobile-header">
         <button
           aria-label="打开导航"
@@ -60,7 +124,7 @@ export function AppShell({ children, onOpenSearch, sync }) {
         </button>
         <span className="mobile-header__brand">
           <img alt="" aria-hidden="true" src="/workbench-mark.svg" />
-          <span>个人 AI</span>
+          <span>司南工作台</span>
         </span>
         <button
           aria-label="搜索"
@@ -81,43 +145,70 @@ export function AppShell({ children, onOpenSearch, sync }) {
         />
       ) : null}
 
-      <aside className={`sidebar${mobileOpen ? " sidebar--open" : ""}`}>
+      <aside
+        className={`sidebar${mobileOpen ? " sidebar--open" : ""}${collapsed ? " sidebar--collapsed" : ""}`}
+      >
         <div className="sidebar__top">
           <div className="sidebar__brand-row">
-            <NavLink className="sidebar__brand" onClick={() => setMobileOpen(false)} to="/">
+            <NavLink
+              className="sidebar__brand"
+              onClick={() => setMobileOpen(false)}
+              title={collapsed ? "司南工作台" : undefined}
+              to="/"
+            >
               <img alt="" aria-hidden="true" src="/workbench-mark.svg" />
-              <span>个人 AI</span>
+              <span>司南工作台</span>
             </NavLink>
             <button
-              aria-label="关闭导航"
-              className="icon-button sidebar__close"
-              onClick={() => setMobileOpen(false)}
+              aria-label={collapsed ? "展开侧栏" : "收缩侧栏"}
+              className="icon-button sidebar__collapse"
+              onClick={toggleCollapsed}
+              title={collapsed ? "展开侧栏" : "收缩侧栏"}
               type="button"
             >
-              <IconX aria-hidden="true" />
+              {collapsed ? (
+                <IconChevronRight aria-hidden="true" />
+              ) : (
+                <IconChevronLeft aria-hidden="true" />
+              )}
             </button>
           </div>
           <div className="sidebar__tag">PERSONAL AI WORKBENCH</div>
 
-          <nav aria-label="主要导航" className="sidebar__nav">
-            {primaryNavigation.map((item) => {
+          <Reorder.Group
+            as="nav"
+            aria-label="主要导航"
+            axis="y"
+            className="sidebar__nav"
+            values={navItems}
+            onReorder={handleNavReorder}
+          >
+            {navItems.map((item) => {
               const Icon = item.icon;
               return (
-                <NavLink
-                  className={({ isActive }) =>
-                    `sidebar__nav-item${isActive ? " sidebar__nav-item--active" : ""}`
-                  }
-                  end={item.end}
-                  key={item.to}
-                  onClick={() => setMobileOpen(false)}
-                  to={item.to}
-                >
-                  <Icon aria-hidden="true" className="sidebar__nav-icon" stroke={1.7} />
-                  <span>{item.label}</span>
-                </NavLink>
+                  <Reorder.Item
+                    as="div"
+                    key={item.to}
+                    value={item}
+                    style={{ position: "relative", zIndex: 1 }}
+                  >
+                    <NavLink
+                      className={({ isActive }) =>
+                        `sidebar__nav-item${isActive ? " sidebar__nav-item--active" : ""}`
+                      }
+                      draggable={false}
+                      end={item.end}
+                      onClick={() => setMobileOpen(false)}
+                      title={collapsed ? item.label : undefined}
+                      to={item.to}
+                    >
+                      <Icon aria-hidden="true" className="sidebar__nav-icon" stroke={1.7} />
+                      <span>{item.label}</span>
+                    </NavLink>
+                  </Reorder.Item>
               );
             })}
-          </nav>
+          </Reorder.Group>
         </div>
 
         <div className="sidebar__bottom">
@@ -128,6 +219,7 @@ export function AppShell({ children, onOpenSearch, sync }) {
           <NavLink
             className="sidebar__settings"
             onClick={() => setMobileOpen(false)}
+            title={collapsed ? "系统状态" : undefined}
             to="/system"
           >
             <IconSettings aria-hidden="true" stroke={1.6} />

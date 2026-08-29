@@ -3,6 +3,7 @@
 export const TYPE_META = {
   concept: { color: "#7c3aed", label: "概念", code: "CPT" },
   framework: { color: "#6d28d9", label: "框架", code: "FRM" },
+  entity: { color: "#7c3aed", label: "实体", code: "ENT" },
   diagnosis: { color: "#8b5cf6", label: "诊断", code: "DIA" },
   analysis: { color: "#5b21b6", label: "分析", code: "ANA" },
   comparison: { color: "#a78bfa", label: "比较", code: "CMP" },

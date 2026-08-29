@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -27,12 +27,55 @@ import {
   MATERIAL_READING_STATE_PATH,
   createMaterialReadingStateRepository,
 } from "./material-reading-state.mjs";
+import { stockUniversePayload } from "./stock-universe.mjs";
+import {
+  STOCK_CODES_PATH,
+  createStockCodesRepository,
+} from "./stock-codes.mjs";
+import {
+  STOCK_WATCHLIST_PATH,
+  createStockWatchlistRepository,
+} from "./stock-watchlist.mjs";
+import {
+  STOCK_RESEARCH_PATH,
+  createStockResearchRepository,
+} from "./stock-research.mjs";
+import { createLlmClient } from "./llm-client.mjs";
+import { pushServerChan } from "./serverchan.mjs";
+import { computeMA, createMarketDataService, maTrend } from "./market-data.mjs";
+import { createStockNewsService } from "./stock-news.mjs";
+import { createStockAnalysisService } from "./stock-analysis.mjs";
+import { createStockFinancialsService } from "./stock-financials.mjs";
+import {
+  createStockPoolRepository,
+  STOCK_POOL_PATH,
+} from "./stock-pool.mjs";
 import {
   materialFolderPayload,
   materialReadingQueuePayload,
   materialsHomePayload,
 } from "./materials.mjs";
 import { booksPayload } from "./books.mjs";
+import { careerPayload, careerRelativePathFromId, readCareerDocument } from "./career.mjs";
+import { createReviewEventsRepository, REVIEW_EVENTS_PATH } from "./review-events.mjs";
+import { createDailyReviewStore, DAILY_REVIEW_PATH } from "./daily-review-store.mjs";
+import { createDailyReviewService } from "./daily-review.mjs";
+import { loadDailyReviewConfig } from "./daily-review-config.mjs";
+import { createPortfolioRepository, PORTFOLIO_PATH } from "./portfolio.mjs";
+import { createSentimentDataService } from "./sentiment-data.mjs";
+import { createPromptsLibrary } from "./prompts-library.mjs";
+import { checkService, createServicesStore } from "./services-store.mjs";
+import { createServersRegistry, openItermSsh, probeServer } from "./servers-registry.mjs";
+import { createDisksMonitor } from "./disks.mjs";
+import { createCoachPromptRepository, COACH_PROMPT_PATH } from "./coach-prompt.mjs";
+import { createPromptCollectionRepository } from "./prompt-collection.mjs";
+import { createReviewScheduleRepository, REVIEW_SCHEDULE_PATH } from "./review-schedule.mjs";
+import {
+  obsidianGraphPayload,
+  obsidianRelativePathFromId,
+  obsidianWikiPayload,
+  readObsidianDocument,
+} from "./obsidian-wiki.mjs";
 import {
   getSocialInsight,
   getSocialTrend,
@@ -213,6 +256,17 @@ function errorStatus(error) {
     ["JOB_NOT_FOUND", "DOCUMENT_NOT_FOUND", "READER_EXPLANATION_NOT_FOUND"].includes(code) ||
     code?.endsWith("_NOT_FOUND")
   ) return 404;
+  // 容量上限与重复冲突：客户端可修复（删几条/改名），409 而非 500。
+  if (
+    [
+      "TOO_MANY_POSITIONS",
+      "TOO_MANY_PROMPTS",
+      "TOO_MANY_STOCK_CODES",
+      "TOO_MANY_STOCK_WATCHLIST_ITEMS",
+      "PROMPT_FILE_NAME_EXHAUSTED",
+      "STOCK_POOL_DUPLICATE",
+    ].includes(code)
+  ) return 409;
   if (
     [
       "CONCURRENCY_LIMIT",
@@ -467,6 +521,7 @@ function collectionPayload(index, kind) {
       topic: "主题入口",
       conflict: "争议问题",
       question: "复用问答",
+      entity: "实体",
     };
     const groups = Object.entries(index.wiki.countsByType)
       .sort((left, right) => right[1] - left[1])
@@ -756,6 +811,72 @@ function requestFilters(url) {
   return filters;
 }
 
+// ===== 监控台 v2 共享：watchdog 状态文件读写 + 估值分位 + 默认配置 =====
+
+const WATCHDOG_STATE_FILES = {
+  alerts: ".workbench-stock-alerts.json",
+  config: ".workbench-watchdog-config.json",
+  valuation: ".workbench-valuation-history.json",
+  diskCache: ".workbench-disk-cache.json",
+};
+const WATCHDOG_STATE_DIR = "10_raw/my-thoughts/reading-notes";
+
+const WATCHDOG_DEFAULT_CONFIG = {
+  enabled: true,
+  thresholdPct: 3,
+  windowMinutes: 5,
+  cooldownMinutes: 15,
+  pushEnabled: true,
+  dailyPushLimit: 5,
+  indexEnabled: true,
+  indexThresholdPct: 1,
+};
+
+function watchdogStatePath(kind) {
+  return path.join(vaultRootForWatchdogState(), WATCHDOG_STATE_DIR, WATCHDOG_STATE_FILES[kind]);
+}
+// vaultRoot 在插件工厂内；这里用模块级默认根（与 watchdog.mjs 一致：仓库旁「个人知识库」）。
+function vaultRootForWatchdogState() {
+  return defaultVaultRoot;
+}
+
+async function readWatchdogState(kind, fallback) {
+  try {
+    return JSON.parse(await readFile(watchdogStatePath(kind), "utf8"));
+  } catch {
+    return fallback;
+  }
+}
+
+async function writeWatchdogState(kind, value) {
+  const target = watchdogStatePath(kind);
+  await mkdir(path.dirname(target), { recursive: true });
+  const tmp = `${target}.${Date.now()}.tmp`;
+  await writeFile(tmp, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  try {
+    await rename(tmp, target);
+  } finally {
+    await unlink(tmp).catch(() => {});
+  }
+}
+
+// 自建估值历史的当前分位（0-100，null 表示样本不足）。样本 <5 天不计算分位。
+function valuationPercentile(series, quote) {
+  const pick = (key, value) =>
+    value == null ? null : (() => {
+      const values = series.map((p) => p[key]).filter((v) => v != null);
+      if (values.length < 5) return null;
+      const below = values.filter((v) => v <= value).length;
+      return Math.round((below / values.length) * 100);
+    })();
+  return {
+    pe: pick("pe", quote.peTtm),
+    pb: pick("pb", quote.pb),
+    sampleDays: series.length,
+  };
+}
+
+
 function openLocalDocument(vaultRoot, document, target) {
   const absolutePath = path.resolve(vaultRoot, document.path);
   if (target === "finder") {
@@ -775,12 +896,133 @@ function openLocalDocument(vaultRoot, document, target) {
 
 export function workbenchApiPlugin({
   vaultRoot = defaultVaultRoot,
+  careerVaultRoot = null,
+  obsidianVaultRoot = null,
+  zhipuApiKey = null,
+  zhipuBaseUrl = null,
+  serverChanSendKey = null,
   readerExplanationService = null,
 } = {}) {
   let readerNoteApiMutationQueue = Promise.resolve();
   const readerNotes = createReaderNotesRepository({ vaultRoot });
   const materialReadingState = createMaterialReadingStateRepository({ vaultRoot });
+  const stockWatchlist = createStockWatchlistRepository({ vaultRoot });
+  const stockCodes = createStockCodesRepository({ vaultRoot });
+  const stockResearch = createStockResearchRepository({ vaultRoot });
+  const stockPool = createStockPoolRepository({ vaultRoot });
+  const stockFinancials = createStockFinancialsService({ vaultRoot });
+  const llmClient = createLlmClient({
+    apiKey: zhipuApiKey,
+    ...(zhipuBaseUrl ? { baseUrl: zhipuBaseUrl } : {}),
+  });
+  const marketData = createMarketDataService();
+  const stockNews = createStockNewsService();
+  const stockAnalysis = createStockAnalysisService({
+    llmClient,
+    newsService: stockNews,
+    marketService: marketData,
+  });
   const wikiIngest = createWikiIngestRunner({ vaultRoot });
+  const reviewEvents = createReviewEventsRepository({ vaultRoot });
+  const dailyReviewStore = createDailyReviewStore({ vaultRoot });
+  const portfolioRepo = createPortfolioRepository({ vaultRoot });
+  const sentimentService = createSentimentDataService();
+  const promptsLibrary = createPromptsLibrary({ llmClient });
+  const servicesStore = createServicesStore({ vaultRoot });
+  const serversRegistry = createServersRegistry();
+  // 磁盘每日缓存与 watchdog 状态同目录（vault 内运行态文件，git 忽略）。
+  const disksMonitor = createDisksMonitor({ statePath: watchdogStatePath("diskCache") });
+  // 健康探测低频策略：自动探测 1 天一次（缓存 24h），页面展示上次探测时间，
+  // 手动按钮经 force 接口即时重测，避免给目标服务压力。
+  const PROBE_TTL_MS = 24 * 60 * 60 * 1000;
+  const servicesStatusCache = new Map(); // id -> { url, checkedAt, status }
+  async function probeServiceById(id) {
+    const state = await servicesStore.list();
+    const item = state.items.find((entry) => entry.id === id);
+    if (!item) return null;
+    const status = await checkService(item.url);
+    servicesStatusCache.set(id, { url: item.url, checkedAt: new Date().toISOString(), status });
+    return status;
+  }
+  async function servicesWithStatus() {
+    const state = await servicesStore.list();
+    const now = Date.now();
+    const expired = (meta) => now - new Date(meta.checkedAt).getTime() > PROBE_TTL_MS;
+    await Promise.all(state.items.map(async (item) => {
+      const cached = servicesStatusCache.get(item.id);
+      if (!cached || expired(cached) || cached.url !== item.url) {
+        servicesStatusCache.set(item.id, {
+          url: item.url,
+          checkedAt: new Date().toISOString(),
+          status: await checkService(item.url),
+        });
+      }
+    }));
+    for (const key of [...servicesStatusCache.keys()]) {
+      if (!state.items.some((item) => item.id === key)) servicesStatusCache.delete(key);
+    }
+    return {
+      updatedAt: state.updatedAt,
+      total: state.items.length,
+      items: state.items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        url: item.url,
+        note: item.note,
+        status: servicesStatusCache.get(item.id)?.status ?? null,
+        probedAt: servicesStatusCache.get(item.id)?.checkedAt ?? null,
+      })),
+    };
+  }
+  // 服务器探测缓存：host -> { key, checkedAt, status }
+  const serversStatusCache = new Map();
+  async function serversWithStatus() {
+    const items = await serversRegistry.list();
+    const now = Date.now();
+    await Promise.all(items.map(async (item) => {
+      const target = item.hostName ?? item.host;
+      const cached = serversStatusCache.get(item.host);
+      const stale = !cached
+        || now - new Date(cached.checkedAt).getTime() > PROBE_TTL_MS
+        || cached.key !== `${target}:${item.port ?? 22}`;
+      if (stale) {
+        serversStatusCache.set(item.host, {
+          key: `${target}:${item.port ?? 22}`,
+          checkedAt: new Date().toISOString(),
+          status: await probeServer({ hostName: target, port: Number(item.port) || 22 }),
+        });
+      }
+    }));
+    return {
+      total: items.length,
+      items: items.map((item) => {
+        const cached = serversStatusCache.get(item.host);
+        return {
+          host: item.host,
+          hostName: item.hostName,
+          user: item.user,
+          port: item.port,
+          source: item.source,
+          profiles: item.profiles,
+          status: cached?.status ?? null,
+          probedAt: cached?.checkedAt ?? null,
+        };
+      }),
+    };
+  }
+  const coachPrompt = createCoachPromptRepository({ vaultRoot });
+  const promptCollection = createPromptCollectionRepository({ vaultRoot });
+  const reviewSchedule = createReviewScheduleRepository({ vaultRoot });
+  const dailyReview = createDailyReviewService({
+    marketService: marketData,
+    loadConfig: () => loadDailyReviewConfig(workbenchRoot),
+    readAlerts: () => readWatchdogState("alerts", { items: [] }),
+    eventsRepo: reviewEvents,
+    reviewStore: dailyReviewStore,
+    portfolioRepo,
+    newsService: stockNews,
+    sentimentService,
+  });
   const readerExplanations = readerExplanationService ??
     createReaderExplanationsService({ vaultRoot });
   const vaultSync = createVaultSyncService({ vaultRoot });
@@ -791,14 +1033,66 @@ export function workbenchApiPlugin({
   });
 
   async function indexedReaderDocument(documentId) {
-    const document = documentPayload(await currentIndex(), documentId);
-    if (!document) {
-      const error = new Error("文档不存在。");
-      error.code = "DOCUMENT_NOT_FOUND";
-      throw error;
+    const careerPath = careerRelativePathFromId(documentId);
+    if (careerPath) {
+      const careerDoc = await readCareerDocument(careerVaultRoot, careerPath);
+      if (!careerDoc) {
+        const error = new Error("文档不存在。");
+        error.code = "DOCUMENT_NOT_FOUND";
+        throw error;
+      }
+      const body = careerDoc.body ?? readerBodyFromContent(careerDoc.content);
+      return {
+        id: careerDoc.id,
+        relativePath: careerDoc.relativePath,
+        title: careerDoc.title,
+        layer: careerDoc.layer,
+        kind: careerDoc.kind,
+        section: null,
+        status: careerDoc.status,
+        type: careerDoc.type,
+        contentType: careerDoc.contentType,
+        updatedAt: careerDoc.updatedAt,
+        body,
+        contentHash: typeof body === "string" ? hashReaderDocumentContent(body) : null,
+        headings: careerDoc.headings ?? [],
+        wikiLinks: careerDoc.wikiLinks ?? [],
+      };
     }
-    return document;
-  }
+      const obsidianPath = obsidianRelativePathFromId(documentId);
+      if (obsidianPath) {
+        const obsidianDoc = await readObsidianDocument(obsidianVaultRoot, obsidianPath);
+        if (!obsidianDoc) {
+          const error = new Error("文档不存在。");
+          error.code = "DOCUMENT_NOT_FOUND";
+          throw error;
+        }
+        const body = obsidianDoc.body ?? readerBodyFromContent(obsidianDoc.content);
+        return {
+          id: obsidianDoc.id,
+          relativePath: obsidianDoc.relativePath,
+          title: obsidianDoc.title,
+          layer: obsidianDoc.layer,
+          kind: obsidianDoc.kind,
+          section: obsidianDoc.section,
+          status: obsidianDoc.status,
+          type: obsidianDoc.type,
+          contentType: obsidianDoc.contentType,
+          updatedAt: obsidianDoc.updatedAt,
+          body,
+          contentHash: typeof body === "string" ? hashReaderDocumentContent(body) : null,
+          headings: obsidianDoc.headings ?? [],
+          wikiLinks: obsidianDoc.wikiLinks ?? [],
+        };
+      }
+      const document = documentPayload(await currentIndex(), documentId);
+      if (!document) {
+        const error = new Error("文档不存在。");
+        error.code = "DOCUMENT_NOT_FOUND";
+        throw error;
+      }
+      return document;
+    }
 
   async function freshIndexedReaderDocument(documentId) {
     const indexed = await indexedReaderDocument(documentId);
@@ -942,6 +1236,64 @@ export function workbenchApiPlugin({
     });
   }
 
+  // 收盘后自动生成「AI 每日总结」：常驻调度（交易日 ≥15:05 触发一次；
+  // 当日已有收盘版则跳过，避免覆盖手动生成；失败仅记日志，当日不重试）。
+  let autoReviewDoneDate = null;
+  let autoReviewRunning = false;
+  async function runAutoReview() {
+    if (autoReviewRunning) return;
+    // 调度配置每 tick 重读：页面改开关/时间即时生效（独立于盯盘配置）。
+    const schedule = await reviewSchedule.get();
+    if (!schedule.enabled) return;
+    const at = new Date();
+    const day = at.getDay();
+    if (day === 0 || day === 6) return;
+    const [hh, mm] = schedule.time.split(":").map(Number);
+    if (at.getHours() * 100 + at.getMinutes() < hh * 100 + mm) return;
+    const date = at.toISOString().slice(0, 10);
+    if (autoReviewDoneDate === date) return;
+    autoReviewRunning = true;
+    try {
+      if (await dailyReviewStore.get(date, "close")) {
+        console.log(`[workbench] 收盘总结已存在（手动生成过），跳过自动生成：${date}`);
+        autoReviewDoneDate = date;
+        return;
+      }
+      const pool = await stockPool.pool(await stockCodes.overrides());
+      const stocks = pool
+        .filter((item) => item.code)
+        .map(({ name, code, note }) => ({ name, code, note }));
+      const context = await dailyReview.collectReviewContext(date, stocks);
+      const { prompt: promptTemplate } = await coachPrompt.get();
+      const started = await stockAnalysis.startCoachReview(context, { promptTemplate });
+      // 轮询上限须覆盖 LLM 最坏情况：单次 10 分钟 + 重试 1 次 = 20 分钟。
+      const deadline = Date.now() + 22 * 60_000;
+      for (;;) {
+        await new Promise((resolve) => setTimeout(resolve, 10_000));
+        const task = stockAnalysis.get(started.id);
+        if (task?.status === "completed") {
+          await dailyReviewStore.save(date, {
+            stockCount: stocks.length,
+            session: "close",
+            review: task.result,
+          });
+          vaultSync.notifyPaths([DAILY_REVIEW_PATH]);
+          console.log(`[workbench] 收盘自动总结完成：${date}（${stocks.length} 只关注股）`);
+          break;
+        }
+        if (task?.status === "failed" || Date.now() > deadline) {
+          console.log(`[workbench] 收盘自动总结未完成：${task?.error?.message ?? "等待超时"}`);
+          break;
+        }
+      }
+    } catch (error) {
+      console.log(`[workbench] 收盘自动总结失败：${error?.message ?? error}`);
+    } finally {
+      autoReviewRunning = false;
+      autoReviewDoneDate = date;
+    }
+  }
+
   return {
     name: "personal-kb-workbench-api",
     async closeBundle() {
@@ -950,7 +1302,15 @@ export function workbenchApiPlugin({
     },
     configureServer(server) {
       vaultSync.attachWatcher(server.watcher);
+      // 收盘后自动生成「AI 每日总结」：每分钟检查，到点（默认 15:05，可配）触发一次；
+      // 当日已有收盘版（手动生成过）则跳过，避免覆盖。
+      // unref：定时器不阻止进程退出（测试环境 instantiate 插件后能正常收尾）。
+      const autoReviewTimer = setInterval(() => {
+        void runAutoReview().catch(() => {});
+      }, 60_000);
+      autoReviewTimer.unref?.();
       server.httpServer?.once("close", () => {
+        clearInterval(autoReviewTimer);
         void vaultSync.close();
       });
       server.middlewares.use(async (req, res, next) => {
@@ -1075,6 +1435,9 @@ export function workbenchApiPlugin({
 
           if (req.method === "GET" && url.pathname.startsWith("/api/collections/")) {
             const kind = decodeURIComponent(url.pathname.slice("/api/collections/".length));
+            if (kind === "wiki" && obsidianVaultRoot) {
+              return json(res, 200, await obsidianWikiPayload(obsidianVaultRoot));
+            }
             return json(res, 200, collectionPayload(await currentIndex(), kind));
           }
 
@@ -1104,6 +1467,66 @@ export function workbenchApiPlugin({
 
           if (req.method === "GET" && url.pathname.startsWith("/api/documents/")) {
             const id = decodeURIComponent(url.pathname.slice("/api/documents/".length));
+            // 求职备战文档来自外部 Obsidian，带 `career-` 前缀时走独立读取器。
+            const careerPath = careerRelativePathFromId(id);
+            if (careerPath) {
+              const careerDoc = await readCareerDocument(careerVaultRoot, careerPath);
+              if (!careerDoc) return json(res, 404, { error: { message: "文档不存在。" } });
+              const body = careerDoc.body ?? readerBodyFromContent(careerDoc.content);
+              const outgoingLinks = (careerDoc.wikiLinks ?? [])
+                .filter((link) => link.resolvedId)
+                .map((link) => ({
+                  id: link.resolvedId,
+                  title: link.label || link.target,
+                }));
+              return json(res, 200, {
+                id: careerDoc.id,
+                relativePath: careerDoc.relativePath,
+                title: careerDoc.title,
+                layer: careerDoc.layer,
+                kind: careerDoc.kind,
+                section: null,
+                status: careerDoc.status,
+                type: careerDoc.type,
+                contentType: careerDoc.contentType,
+                updatedAt: careerDoc.updatedAt,
+                body,
+                contentHash: typeof body === "string" ? hashReaderDocumentContent(body) : null,
+                headings: careerDoc.headings ?? [],
+                wikiLinks: careerDoc.wikiLinks ?? [],
+                outgoingLinks,
+              });
+            }
+            // 知识本体文档（知识星图/Wiki 层）来自外部 Obsidian，带 `obsidian-` 前缀。
+            const obsidianPath = obsidianRelativePathFromId(id);
+            if (obsidianPath) {
+              const obsidianDoc = await readObsidianDocument(obsidianVaultRoot, obsidianPath);
+              if (!obsidianDoc) return json(res, 404, { error: { message: "文档不存在。" } });
+              const body = obsidianDoc.body ?? readerBodyFromContent(obsidianDoc.content);
+              const outgoingLinks = (obsidianDoc.wikiLinks ?? [])
+                .filter((link) => link.resolvedId)
+                .map((link) => ({
+                  id: link.resolvedId,
+                  title: link.label || link.target,
+                }));
+              return json(res, 200, {
+                id: obsidianDoc.id,
+                relativePath: obsidianDoc.relativePath,
+                title: obsidianDoc.title,
+                layer: obsidianDoc.layer,
+                kind: obsidianDoc.kind,
+                section: obsidianDoc.section,
+                status: obsidianDoc.status,
+                type: obsidianDoc.type,
+                contentType: obsidianDoc.contentType,
+                updatedAt: obsidianDoc.updatedAt,
+                body,
+                contentHash: typeof body === "string" ? hashReaderDocumentContent(body) : null,
+                headings: obsidianDoc.headings ?? [],
+                wikiLinks: obsidianDoc.wikiLinks ?? [],
+                outgoingLinks,
+              });
+            }
             const document = documentPayload(await currentIndex(), id);
             if (!document) return json(res, 404, { error: { message: "文档不存在。" } });
             return json(res, 200, document);
@@ -1417,6 +1840,9 @@ export function workbenchApiPlugin({
           }
 
           if (req.method === "GET" && url.pathname === "/api/graph") {
+            if (obsidianVaultRoot) {
+              return json(res, 200, await obsidianGraphPayload(obsidianVaultRoot));
+            }
             return json(res, 200, graphPayload(await currentIndex()));
           }
 
@@ -1447,6 +1873,722 @@ export function workbenchApiPlugin({
 
           if (req.method === "GET" && url.pathname === "/api/social-insights") {
             return json(res, 200, listSocialInsights(await currentIndex()));
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/career") {
+            return json(res, 200, await careerPayload(careerVaultRoot));
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/stock-universe") {
+            return json(res, 200, stockUniversePayload(await stockCodes.overrides()));
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/stock-codes") {
+            const codes = await stockCodes.list();
+            return json(res, 200, {
+              updatedAt: codes.updatedAt,
+              items: codes.items,
+            });
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/services") {
+            return json(res, 200, await servicesWithStatus());
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/services/probe") {
+            const body = await readJson(req, 1_000).catch(() => null);
+            const status = await probeServiceById(String(body?.id ?? ""));
+            if (!status) return json(res, 404, { error: { code: "NOT_FOUND", message: "服务不存在" } });
+            return json(res, 200, { status, probedAt: new Date().toISOString() });
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/servers") {
+            return json(res, 200, await serversWithStatus());
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/system/disks") {
+            try {
+              return json(res, 200, await disksMonitor.list());
+            } catch (error) {
+              return json(res, 502, { error: { code: "DISK_FAILED", message: error?.message ?? "读取磁盘信息失败" } });
+            }
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/system/disks/refresh") {
+            try {
+              return json(res, 200, await disksMonitor.refresh());
+            } catch (error) {
+              return json(res, 502, { error: { code: "DISK_FAILED", message: error?.message ?? "读取磁盘信息失败" } });
+            }
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/system/disks/dirs") {
+            const body = await readJson(req, 500).catch(() => null);
+            const mount = String(body?.mount ?? "");
+            try {
+              const { items } = await disksMonitor.list();
+              return json(res, 200, disksMonitor.startDirAnalysis(mount, items.map((disk) => disk.mount)));
+            } catch (error) {
+              return json(res, 400, { error: { code: "BAD_REQUEST", message: error?.message ?? "启动分析失败" } });
+            }
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/system/disks/dirs") {
+            const mount = url.searchParams.get("mount") ?? "";
+            const result = disksMonitor.getDirAnalysis(mount);
+            if (!result) return json(res, 404, { error: { code: "NOT_FOUND", message: "尚未分析" } });
+            return json(res, 200, result);
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/servers/probe") {
+            const body = await readJson(req, 1_000).catch(() => null);
+            const host = String(body?.host ?? "");
+            const items = await serversRegistry.list();
+            const item = items.find((entry) => entry.host === host);
+            if (!item) return json(res, 404, { error: { code: "NOT_FOUND", message: "主机不在 ssh 配置中" } });
+            const status = await probeServer({ hostName: item.hostName ?? item.host, port: Number(item.port) || 22 });
+            serversStatusCache.set(host, {
+              key: `${item.hostName ?? item.host}:${item.port ?? 22}`,
+              checkedAt: new Date().toISOString(),
+              status,
+            });
+            return json(res, 200, { status, probedAt: new Date().toISOString() });
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/servers/open") {
+            const body = await readJson(req, 1_000).catch(() => null);
+            try {
+              return json(res, 200, await openItermSsh(String(body?.host ?? "")));
+            } catch (error) {
+              return json(res, 400, { error: { code: "OPEN_FAILED", message: error?.message ?? "打开失败" } });
+            }
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/services") {
+            const body = await readJson(req, 4 * 1024);
+            assertAllowedObjectKeys(body, new Set(["name", "url", "note"]), "INVALID_SERVICES_REQUEST");
+            try {
+              const { item } = await servicesStore.add(body);
+              vaultSync.notifyPaths([servicesStore.filePath]);
+              return json(res, 200, item);
+            } catch (error) {
+              return json(res, 400, { error: { code: "INVALID_SERVICES_REQUEST", message: error?.message ?? "保存失败" } });
+            }
+          }
+
+          const servicesMatch = url.pathname.match(/^\/api\/services\/([^/]+)$/);
+          if (servicesMatch) {
+            const id = decodeURIComponent(servicesMatch[1]);
+            if (req.method === "PUT") {
+              const body = await readJson(req, 4 * 1024);
+              assertAllowedObjectKeys(body, new Set(["name", "url", "note"]), "INVALID_SERVICES_REQUEST");
+              try {
+                const result = await servicesStore.update(id, body);
+                if (!result) return json(res, 404, { error: { code: "NOT_FOUND", message: "服务不存在" } });
+                vaultSync.notifyPaths([servicesStore.filePath]);
+                return json(res, 200, result.item);
+              } catch (error) {
+                return json(res, 400, { error: { code: "INVALID_SERVICES_REQUEST", message: error?.message ?? "更新失败" } });
+              }
+            }
+            if (req.method === "DELETE") {
+              const removed = await servicesStore.remove(id);
+              if (removed) vaultSync.notifyPaths([servicesStore.filePath]);
+              return json(res, 200, { removed });
+            }
+          }
+
+          if (req.method === "PUT" && url.pathname === "/api/stock-codes") {
+            const body = await readJson(req, 16 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["name", "code"]),
+              "INVALID_STOCK_CODES_REQUEST",
+            );
+            const item = await stockCodes.set(body.name, body.code);
+            vaultSync.notifyPaths([STOCK_CODES_PATH]);
+            return json(res, 200, item);
+          }
+
+          const stockCodesMatch = url.pathname.match(/^\/api\/stock-codes\/([^/]+)$/);
+          if (req.method === "DELETE" && stockCodesMatch) {
+            const name = decodeURIComponent(stockCodesMatch[1]);
+            const removed = await stockCodes.remove(name);
+            if (removed) vaultSync.notifyPaths([STOCK_CODES_PATH]);
+            return json(res, 200, { removed });
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/stock-watchlist") {
+            const watchlist = await stockWatchlist.list();
+            return json(res, 200, {
+              updatedAt: watchlist.updatedAt,
+              total: watchlist.items.length,
+              items: watchlist.items,
+            });
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/stock-watchlist") {
+            const body = await readJson(req, 16 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["name", "group", "note"]),
+              "INVALID_STOCK_WATCHLIST_REQUEST",
+            );
+            const item = await stockWatchlist.add(body.name, {
+              group: body.group,
+              note: body.note,
+            });
+            vaultSync.notifyPaths([STOCK_WATCHLIST_PATH]);
+            return json(res, 200, item);
+          }
+
+          const stockWatchlistMatch = url.pathname.match(
+            /^\/api\/stock-watchlist\/([^/]+)$/,
+          );
+          if (req.method === "PUT" && stockWatchlistMatch) {
+            const name = decodeURIComponent(stockWatchlistMatch[1]);
+            const body = await readJson(req, 16 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["group", "note"]),
+              "INVALID_STOCK_WATCHLIST_REQUEST",
+            );
+            const item = await stockWatchlist.updateMeta(name, {
+              group: body.group,
+              note: body.note,
+            });
+            if (!item) return json(res, 404, { error: { message: "该股尚未关注。" } });
+            vaultSync.notifyPaths([STOCK_WATCHLIST_PATH]);
+            return json(res, 200, item);
+          }
+          if (req.method === "DELETE" && stockWatchlistMatch) {
+            const name = decodeURIComponent(stockWatchlistMatch[1]);
+            const removed = await stockWatchlist.remove(name);
+            if (removed) vaultSync.notifyPaths([STOCK_WATCHLIST_PATH]);
+            return json(res, 200, { removed });
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/stock-research") {
+            const research = await stockResearch.list();
+            return json(res, 200, {
+              updatedAt: research.updatedAt,
+              total: research.reports.length,
+              reports: research.reports,
+            });
+          }
+
+          const stockResearchMatch = url.pathname.match(
+            /^\/api\/stock-research\/([^/]+)$/,
+          );
+          if (req.method === "PUT" && stockResearchMatch) {
+            const name = decodeURIComponent(stockResearchMatch[1]);
+            const body = await readJson(req, 512 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["generatedAt", "report"]),
+              "INVALID_STOCK_RESEARCH_REQUEST",
+            );
+            const entry = await stockResearch.save(name, {
+              generatedAt: body.generatedAt,
+              report: body.report,
+            });
+            vaultSync.notifyPaths([STOCK_RESEARCH_PATH]);
+            return json(res, 200, entry);
+          }
+          if (req.method === "DELETE" && stockResearchMatch) {
+            const name = decodeURIComponent(stockResearchMatch[1]);
+            const removed = await stockResearch.remove(name);
+            if (removed) vaultSync.notifyPaths([STOCK_RESEARCH_PATH]);
+            return json(res, 200, { removed });
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/market/quotes") {
+            const codes = url.searchParams.getAll("codes");
+            const quotes = await marketData.getQuotes(codes);
+            return json(res, 200, {
+              items: [...quotes.values()],
+            });
+          }
+
+          // ===== 监控台 v2：股票池 / 财务 / 技术 / 异动 / 盯盘配置 / 估值分位 =====
+
+          if (req.method === "GET" && url.pathname === "/api/stock-pool") {
+            const overrides = await stockCodes.overrides();
+            const items = await stockPool.pool(overrides);
+            return json(res, 200, { generatedAt: new Date().toISOString(), total: items.length, items });
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/stock-pool") {
+            const body = await readJson(req, 16 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["name", "code", "chain", "board", "segment", "note"]),
+              "INVALID_STOCK_POOL_REQUEST",
+            );
+            const item = await stockPool.addCustom(body);
+            vaultSync.notifyPaths([STOCK_POOL_PATH]);
+            return json(res, 200, item);
+          }
+
+          const stockPoolMatch = url.pathname.match(/^\/api\/stock-pool\/([^/]+)$/);
+          if (req.method === "DELETE" && stockPoolMatch) {
+            const name = decodeURIComponent(stockPoolMatch[1]);
+            const removed = await stockPool.removeCustom(name);
+            if (removed) vaultSync.notifyPaths([STOCK_POOL_PATH]);
+            return json(res, 200, { removed });
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/stock-financials") {
+            const code = url.searchParams.get("code") ?? "";
+            if (!/^\d{6}$/.test(code)) {
+              return json(res, 400, { error: { message: "股票代码必须是 6 位数字。" } });
+            }
+            const financials = await stockFinancials.getFinancials(code);
+            return json(res, 200, financials);
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/stock-technicals") {
+            const code = url.searchParams.get("code") ?? "";
+            if (!/^\d{6}$/.test(code)) {
+              return json(res, 400, { error: { message: "股票代码必须是 6 位数字。" } });
+            }
+            const klines = await marketData.getDailyKlines(code, 120);
+            const ma = computeMA(klines);
+            return json(res, 200, {
+              code,
+              klineCount: klines.length,
+              latest: klines.at(-1) ?? null,
+              ma,
+              trend: maTrend(ma),
+            });
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/stock-alerts") {
+            const alerts = await readWatchdogState("alerts", { items: [] });
+            return json(res, 200, {
+              updatedAt: alerts.updatedAt ?? null,
+              total: (alerts.items ?? []).length,
+              items: [...(alerts.items ?? [])].reverse().slice(0, 50),
+            });
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/watchdog-config") {
+            const config = await readWatchdogState("config", {});
+            return json(res, 200, {
+              pushConfigured: Boolean(serverChanSendKey),
+              config: { ...WATCHDOG_DEFAULT_CONFIG, ...config },
+            });
+          }
+
+          if (req.method === "PUT" && url.pathname === "/api/watchdog-config") {
+            const body = await readJson(req, 8 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["enabled", "thresholdPct", "windowMinutes", "cooldownMinutes", "pushEnabled", "dailyPushLimit", "indexEnabled", "indexThresholdPct"]),
+              "INVALID_WATCHDOG_CONFIG",
+            );
+            const current = await readWatchdogState("config", {});
+            const next = { ...WATCHDOG_DEFAULT_CONFIG, ...current, ...body };
+            await writeWatchdogState("config", next);
+            return json(res, 200, { pushConfigured: Boolean(serverChanSendKey), config: next });
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/valuation-history") {
+            const code = url.searchParams.get("code") ?? "";
+            if (!/^\d{6}$/.test(code)) {
+              return json(res, 400, { error: { message: "股票代码必须是 6 位数字。" } });
+            }
+            const history = await readWatchdogState("valuation", {});
+            const series = history[code] ?? [];
+            const quotesNow = await marketData.getQuotes([code]);
+            const quote = quotesNow.get(code) ?? null;
+            return json(res, 200, {
+              code,
+              points: series,
+              since: series[0]?.date ?? null,
+              current: quote ? { pe: quote.peTtm, pb: quote.pb, price: quote.price } : null,
+              percentile: quote ? valuationPercentile(series, quote) : null,
+            });
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/watchdog-test") {
+            if (!serverChanSendKey) {
+              return json(res, 400, { error: { message: "未配置 SERVERCHAN_SENDKEY，无法测试推送。" } });
+            }
+            const result = await pushServerChan(
+              serverChanSendKey,
+              "【测试】司南工作台盯盘推送",
+              "这是一条测试消息。收到即说明 Server酱 推送链路正常。",
+            );
+            if (!result.ok) {
+              return json(res, 502, { error: { message: `推送失败：${result.reason}` } });
+            }
+            return json(res, 200, { ok: true });
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/stock-news") {
+            const name = url.searchParams.get("name") ?? "";
+            const code = url.searchParams.get("code") ?? null;
+            const items = await stockNews.getStockNews({ name, code });
+            return json(res, 200, { name, items });
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/stock-analysis/sentiment") {
+            const body = await readJson(req, 64 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["name", "note", "code", "entityContent"]),
+              "INVALID_STOCK_ANALYSIS_REQUEST",
+            );
+            const task = await stockAnalysis.startSentiment({
+              name: body.name,
+              note: body.note ?? null,
+              code: body.code ?? null,
+              entityContent: body.entityContent ?? null,
+            });
+            return json(res, 202, task);
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/stock-analysis/research") {
+            const body = await readJson(req, 64 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["name", "note", "code", "entityContent"]),
+              "INVALID_STOCK_ANALYSIS_REQUEST",
+            );
+            const task = await stockAnalysis.startResearch({
+              name: body.name,
+              note: body.note ?? null,
+              code: body.code ?? null,
+              entityContent: body.entityContent ?? null,
+            });
+            return json(res, 202, task);
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/daily-review/indices") {
+            const date = url.searchParams.get("date") ?? null;
+            return json(res, 200, await dailyReview.getIndices(date));
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/daily-review/intraday") {
+            const code = url.searchParams.get("code") ?? "";
+            const date = url.searchParams.get("date") ?? null;
+            try {
+              return json(res, 200, await dailyReview.getStockIntraday(code, date));
+            } catch (error) {
+              if (error?.code === "INVALID_STOCK_CODE") {
+                return json(res, 400, { error: { message: error.message } });
+              }
+              throw error;
+            }
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/portfolio") {
+            return json(res, 200, await dailyReview.getPortfolio());
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/portfolio") {
+            const body = await readJson(req, 4 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["code", "name", "shares", "costPrice", "openedAt", "targetPrice", "stopPrice", "note"]),
+              "INVALID_PORTFOLIO_REQUEST",
+            );
+            try {
+              const position = await portfolioRepo.add(body);
+              vaultSync.notifyPaths([PORTFOLIO_PATH]);
+              return json(res, 201, position);
+            } catch (error) {
+              return json(res, 400, { error: { message: error?.message || "持仓无效。" } });
+            }
+          }
+
+          const portfolioMatch = url.pathname.match(/^\/api\/portfolio\/([^/]+)$/);
+          if (portfolioMatch) {
+            const id = decodeURIComponent(portfolioMatch[1]);
+            if (req.method === "PUT") {
+              const body = await readJson(req, 4 * 1024);
+              assertAllowedObjectKeys(
+                body,
+                new Set(["code", "name", "shares", "costPrice", "openedAt", "targetPrice", "stopPrice", "note", "closedAt", "closedPrice"]),
+                "INVALID_PORTFOLIO_REQUEST",
+              );
+              const updated = await portfolioRepo.update(id, body);
+              if (!updated) return json(res, 404, { error: { message: "持仓不存在。" } });
+              vaultSync.notifyPaths([PORTFOLIO_PATH]);
+              return json(res, 200, updated);
+            }
+            if (req.method === "DELETE") {
+              const removed = await portfolioRepo.remove(id);
+              if (!removed) return json(res, 404, { error: { message: "持仓不存在。" } });
+              vaultSync.notifyPaths([PORTFOLIO_PATH]);
+              return json(res, 200, { removed: true });
+            }
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/daily-review/kline") {
+            const symbol = url.searchParams.get("symbol") ?? "";
+            const days = Number(url.searchParams.get("days") ?? 60);
+            try {
+              return json(res, 200, await dailyReview.getIndexDaily(symbol, days));
+            } catch (error) {
+              if (error?.code === "INDEX_NOT_ALLOWED") {
+                return json(res, 400, { error: { message: error.message } });
+              }
+              throw error;
+            }
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/daily-review/timeline") {
+            const date = url.searchParams.get("date") ?? null;
+            return json(res, 200, await dailyReview.getTimeline(date));
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/daily-review/events") {
+            const date = url.searchParams.get("date");
+            return json(res, 200, { items: await reviewEvents.list(date ? { date } : {}) });
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/daily-review/events") {
+            const body = await readJson(req, 8 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["ts", "title", "note", "tone"]),
+              "INVALID_REVIEW_EVENT_REQUEST",
+            );
+            try {
+              const event = await reviewEvents.add(body);
+              vaultSync.notifyPaths([REVIEW_EVENTS_PATH]);
+              return json(res, 201, event);
+            } catch (error) {
+              return json(res, 400, { error: { message: error?.message || "事件无效。" } });
+            }
+          }
+
+          const reviewEventMatch = url.pathname.match(
+            /^\/api\/daily-review\/events\/([^/]+)$/,
+          );
+          if (reviewEventMatch) {
+            const id = decodeURIComponent(reviewEventMatch[1]);
+            if (req.method === "PUT") {
+              const body = await readJson(req, 8 * 1024);
+              assertAllowedObjectKeys(
+                body,
+                new Set(["ts", "title", "note", "tone"]),
+                "INVALID_REVIEW_EVENT_REQUEST",
+              );
+              const updated = await reviewEvents.update(id, body);
+              if (!updated) return json(res, 404, { error: { message: "事件不存在。" } });
+              vaultSync.notifyPaths([REVIEW_EVENTS_PATH]);
+              return json(res, 200, updated);
+            }
+            if (req.method === "DELETE") {
+              const removed = await reviewEvents.remove(id);
+              if (!removed) return json(res, 404, { error: { message: "事件不存在。" } });
+              vaultSync.notifyPaths([REVIEW_EVENTS_PATH]);
+              return json(res, 200, { removed: true });
+            }
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/daily-review/summary") {
+            const date = url.searchParams.get("date") ?? "";
+            const [intraday, close] = await Promise.all([
+              dailyReviewStore.get(date, "intraday"),
+              dailyReviewStore.get(date, "close"),
+            ]);
+            return json(res, 200, { intraday, close });
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/prompts/suggest") {
+            const body = await readJson(req, 2_000).catch(() => null);
+            const idea = typeof body?.idea === "string" ? body.idea.trim() : "";
+            if (!idea) return json(res, 400, { error: { code: "BAD_REQUEST", message: "缺少 idea" } });
+            try {
+              return json(res, 200, await promptsLibrary.suggestKeywords(idea));
+            } catch (error) {
+              return json(res, 502, { error: { code: "LLM_FAILED", message: error?.message ?? "AI 检索失败" } });
+            }
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/prompts/optimize") {
+            const body = await readJson(req, 32_000).catch(() => null);
+            const idea = typeof body?.idea === "string" ? body.idea.trim() : "";
+            const template = typeof body?.template === "string" ? body.template : "";
+            const context = typeof body?.context === "string" ? body.context : "";
+            if (!idea || !template) {
+              return json(res, 400, { error: { code: "BAD_REQUEST", message: "缺少 idea 或 template" } });
+            }
+            try {
+              return json(res, 200, await promptsLibrary.optimize({ idea, template, context }));
+            } catch (error) {
+              return json(res, 502, { error: { code: "LLM_FAILED", message: error?.message ?? "AI 优化失败" } });
+            }
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/prompts") {
+            const q = url.searchParams.get("q") ?? "";
+            const lang = url.searchParams.get("lang") ?? "all";
+            const limit = Math.min(Number(url.searchParams.get("limit")) || 30, 50);
+            try {
+              return json(res, 200, await promptsLibrary.search({ q, lang, limit }));
+            } catch (error) {
+              return json(res, 502, { error: { code: "PROMPTS_UNAVAILABLE", message: error?.message ?? "提示词库暂不可用" } });
+            }
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/prompts/collection") {
+            return json(res, 200, await promptCollection.list());
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/prompts/collection") {
+            const body = await readJson(req, 64 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["title", "content", "tags", "source"]),
+              "INVALID_PROMPT_REQUEST",
+            );
+            const item = await promptCollection.create(body);
+            vaultSync.notifyPaths([item.id]);
+            return json(res, 200, item);
+          }
+
+          if (req.method === "PATCH" && url.pathname === "/api/prompts/collection") {
+            const body = await readJson(req, 64 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["title", "content", "tags", "source"]),
+              "INVALID_PROMPT_REQUEST",
+            );
+            const item = await promptCollection.update(url.searchParams.get("id"), body);
+            vaultSync.notifyPaths([item.id]);
+            return json(res, 200, item);
+          }
+
+          if (req.method === "DELETE" && url.pathname === "/api/prompts/collection") {
+            const result = await promptCollection.remove(url.searchParams.get("id"));
+            vaultSync.notifyPaths([result.id]);
+            return json(res, 200, result);
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/daily-review/sentiment") {
+            if (!sentimentService) return json(res, 200, null);
+            return json(res, 200, await sentimentService.getSentiment().catch(() => null));
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/daily-review/schedule") {
+            return json(res, 200, await reviewSchedule.get());
+          }
+
+          if (req.method === "PUT" && url.pathname === "/api/daily-review/schedule") {
+            const body = await readJson(req, 2 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["enabled", "time"]),
+              "INVALID_REVIEW_SCHEDULE_REQUEST",
+            );
+            try {
+              const saved = await reviewSchedule.save(body);
+              vaultSync.notifyPaths([REVIEW_SCHEDULE_PATH]);
+              return json(res, 200, saved);
+            } catch (error) {
+              return json(res, 400, { error: { message: error?.message || "调度配置无效。" } });
+            }
+          }
+
+          if (req.method === "GET" && url.pathname === "/api/daily-review/prompt") {
+            const current = await coachPrompt.get();
+            return json(res, 200, {
+              prompt: current.prompt,
+              customized: current.customized,
+              variables: ["{{date}}", "{{session}}"],
+            });
+          }
+
+          if (req.method === "PUT" && url.pathname === "/api/daily-review/prompt") {
+            const body = await readJson(req, 32 * 1024);
+            assertAllowedObjectKeys(body, new Set(["prompt"]), "INVALID_COACH_PROMPT_REQUEST");
+            try {
+              const saved = await coachPrompt.save(body.prompt);
+              vaultSync.notifyPaths([COACH_PROMPT_PATH]);
+              return json(res, 200, { ...saved, variables: ["{{date}}", "{{session}}"] });
+            } catch (error) {
+              return json(res, 400, { error: { message: error?.message || "提示词无效。" } });
+            }
+          }
+
+          if (req.method === "DELETE" && url.pathname === "/api/daily-review/prompt") {
+            const reset = await coachPrompt.reset();
+            vaultSync.notifyPaths([COACH_PROMPT_PATH]);
+            return json(res, 200, { ...reset, variables: ["{{date}}", "{{session}}"] });
+          }
+
+          const reviewSummaryMatch = url.pathname.match(
+            /^\/api\/daily-review\/summary\/([^/]+)$/,
+          );
+          if (req.method === "PUT" && reviewSummaryMatch) {
+            const date = decodeURIComponent(reviewSummaryMatch[1]);
+            const body = await readJson(req, 32 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["stockCount", "review", "session"]),
+              "INVALID_REVIEW_SUMMARY_REQUEST",
+            );
+            try {
+              const entry = await dailyReviewStore.save(date, body);
+              vaultSync.notifyPaths([DAILY_REVIEW_PATH]);
+              return json(res, 200, entry);
+            } catch (error) {
+              return json(res, 400, { error: { message: error?.message || "总结无效。" } });
+            }
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/daily-review/generate") {
+            const body = await readJson(req, 16 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["stocks", "date", "session"]),
+              "INVALID_REVIEW_GENERATE_REQUEST",
+            );
+            const context = await dailyReview.collectReviewContext(
+              typeof body.date === "string" ? body.date : null,
+              Array.isArray(body.stocks) ? body.stocks : [],
+            );
+            if (body.session === "intraday" || body.session === "close") {
+              context.session = {
+                ...context.session,
+                key: body.session,
+                isTrading: body.session === "intraday",
+                label: body.session === "intraday" ? "盘中" : "盘后",
+              };
+            }
+            const { prompt: promptTemplate } = await coachPrompt.get();
+            const task = await stockAnalysis.startCoachReview(context, { promptTemplate });
+            return json(res, 202, task);
+          }
+
+          if (req.method === "POST" && url.pathname === "/api/stock-analysis/review") {
+            const body = await readJson(req, 128 * 1024);
+            assertAllowedObjectKeys(
+              body,
+              new Set(["stocks", "indices", "events"]),
+              "INVALID_STOCK_REVIEW_REQUEST",
+            );
+            const task = await stockAnalysis.startReview({
+              stocks: Array.isArray(body.stocks) ? body.stocks : [],
+              indices: Array.isArray(body.indices) ? body.indices : [],
+              events: Array.isArray(body.events) ? body.events : [],
+            });
+            return json(res, 202, task);
+          }
+
+          const stockAnalysisMatch = url.pathname.match(
+            /^\/api\/stock-analysis\/([^/]+)$/,
+          );
+          if (req.method === "GET" && stockAnalysisMatch) {
+            const id = decodeURIComponent(stockAnalysisMatch[1]);
+            const task = stockAnalysis.get(id);
+            if (!task) return json(res, 404, { error: { message: "分析任务不存在。" } });
+            return json(res, 200, task);
           }
 
           if (req.method === "GET" && url.pathname === "/api/social-trends") {
@@ -1537,12 +2679,33 @@ export function workbenchApiPlugin({
 
           if (req.method === "POST" && url.pathname === "/api/open") {
             const body = await readJson(req);
-            const current = await currentIndex();
-            const document = getDocument(current, body.id);
-            if (!document) return json(res, 404, { error: { message: "文档不存在。" } });
             if (!["obsidian", "finder"].includes(body.target)) {
               return json(res, 400, { error: { message: "不支持的打开方式。" } });
             }
+            const careerPath = careerRelativePathFromId(body.id);
+            if (careerPath) {
+              if (!careerVaultRoot) {
+                return json(res, 404, { error: { message: "文档不存在。" } });
+              }
+              const careerDoc = await readCareerDocument(careerVaultRoot, careerPath);
+              if (!careerDoc) return json(res, 404, { error: { message: "文档不存在。" } });
+              // 用 Obsidian 的 vault 根定位实际文件（相对路径在 careerDoc.relativePath）。
+              openLocalDocument(careerVaultRoot, { path: careerDoc.relativePath }, body.target);
+              return json(res, 200, { ok: true });
+            }
+            const obsidianPath = obsidianRelativePathFromId(body.id);
+            if (obsidianPath) {
+              if (!obsidianVaultRoot) {
+                return json(res, 404, { error: { message: "文档不存在。" } });
+              }
+              const obsidianDoc = await readObsidianDocument(obsidianVaultRoot, obsidianPath);
+              if (!obsidianDoc) return json(res, 404, { error: { message: "文档不存在。" } });
+              openLocalDocument(obsidianVaultRoot, { path: obsidianDoc.relativePath }, body.target);
+              return json(res, 200, { ok: true });
+            }
+            const current = await currentIndex();
+            const document = getDocument(current, body.id);
+            if (!document) return json(res, 404, { error: { message: "文档不存在。" } });
             openLocalDocument(vaultRoot, document, body.target);
             return json(res, 200, { ok: true });
           }

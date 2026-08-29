@@ -11,7 +11,7 @@
   --surface-sunken: #f4f4f5;
   --ink: #0a0a0a;
   --ink-soft: #52525b;
-  --ink-faint: #a1a1aa;
+  --ink-faint: #71717a; /* zinc-500：对 --paper 对比度 ≈4.8:1，满足 AA（10px mono 小标签亦安全） */
   --line: #ececee;
   --line-strong: #dcdce0;
 
@@ -29,6 +29,8 @@
   --font-body: "Noto Sans SC", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
 
+  /* 圆角体系（全站唯一规则）：输入/小控件 8 · 卡片/面板 14 · 大容器 22 · 徽章/胶囊 999。
+     表格单元格与图表 0。新增组件按此映射取值，不得自造中间值。 */
   --r-sm: 8px;
   --r-md: 14px;
   --r-lg: 22px;
@@ -746,6 +748,12 @@ h3 {
   font-weight: 500;
   transition: background 0.16s var(--ease), color 0.16s var(--ease);
   position: relative;
+  /* 导航项支持拖拽排序（motion Reorder），用 grab 光标提示 */
+  cursor: grab;
+}
+
+.sidebar__nav-item:active {
+  cursor: grabbing;
 }
 
 .sidebar__nav-item:hover {
@@ -825,7 +833,56 @@ h3 {
   background: var(--surface-sunken);
 }
 
-.sidebar__close {
+/* 桌面端侧栏收缩/展开按钮（移动端隐藏，用遮罩关闭抽屉） */
+.sidebar__collapse {
+  display: inline-flex;
+}
+
+/* 收缩态：覆盖 --sidebar-w 让 sidebar 宽与主区边距同步收窄 */
+.app-shell--sidebar-collapsed {
+  --sidebar-w: 68px;
+}
+
+.sidebar--collapsed {
+  padding: 20px 10px 16px;
+}
+
+.sidebar--collapsed .sidebar__brand-row {
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebar--collapsed .sidebar__brand {
+  justify-content: center;
+  padding: 0;
+}
+
+.sidebar--collapsed .sidebar__brand span,
+.sidebar--collapsed .sidebar__tag,
+.sidebar--collapsed .sidebar__nav-item span,
+.sidebar--collapsed .sidebar__settings span {
+  display: none;
+}
+
+.sidebar--collapsed .sidebar__nav-item {
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.sidebar--collapsed .sidebar__nav-icon {
+  margin: 0;
+}
+
+.sidebar--collapsed .sidebar__settings {
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.sidebar--collapsed .sidebar__sync {
+  justify-content: center;
+}
+
+.sidebar--collapsed .sidebar__sync span:last-child {
   display: none;
 }
 
@@ -2210,15 +2267,53 @@ h3 {
     transform: translateX(-100%);
     transition: transform 0.25s var(--ease);
     box-shadow: none;
+    /* 移动端抽屉始终全宽，不受桌面收缩态影响 */
+    width: 244px;
+    padding: 26px 18px 22px;
+  }
+
+  .sidebar__collapse {
+    display: none;
+  }
+
+  .sidebar--collapsed .sidebar__brand-row {
+    flex-direction: row;
+  }
+
+  .sidebar--collapsed .sidebar__brand span {
+    display: inline;
+  }
+
+  .sidebar--collapsed .sidebar__tag {
+    display: block;
+  }
+
+  .sidebar--collapsed .sidebar__nav-item {
+    justify-content: flex-start;
+    padding: 10px 12px;
+  }
+
+  .sidebar--collapsed .sidebar__nav-item span,
+  .sidebar--collapsed .sidebar__settings span {
+    display: inline;
+  }
+
+  .sidebar--collapsed .sidebar__settings {
+    justify-content: flex-start;
+    padding: 10px 12px;
+  }
+
+  .sidebar--collapsed .sidebar__sync {
+    justify-content: flex-start;
+  }
+
+  .sidebar--collapsed .sidebar__sync span:last-child {
+    display: inline;
   }
 
   .sidebar--open {
     transform: translateX(0);
     box-shadow: var(--shadow-lg);
-  }
-
-  .sidebar__close {
-    display: inline-flex;
   }
 
   .sidebar-backdrop {

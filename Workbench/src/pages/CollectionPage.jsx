@@ -6,6 +6,9 @@ import { loadCollection } from "../lib/api";
 import { collectionItemMatchesGroup } from "../lib/collection-filter";
 import { formatCompactDate, statusLabel } from "../lib/format";
 
+// 列表入场动画会话内只播一次：二次进入直出内容，避免「重新加载」感。
+let collectionEntranceDone = false;
+
 export function CollectionPage({
   kind,
   eyebrow,
@@ -27,8 +30,9 @@ export function CollectionPage({
     };
   }, [kind]);
 
-  // GSAP count animation on mount
+  // GSAP count animation on mount（会话内只播一次，二次进入直出终值）
   useEffect(() => {
+    collectionEntranceDone = true;
     if (result.source !== "loading" && result.data?.groups) {
       const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -156,7 +160,7 @@ export function CollectionPage({
           {displayItems.length > 0 ? (
             <motion.div
               className="doc-table"
-              initial={{ opacity: 0, y: 8 }}
+              initial={collectionEntranceDone ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25 }}
             >

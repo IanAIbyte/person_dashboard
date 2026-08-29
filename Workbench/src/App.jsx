@@ -3,16 +3,16 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-
 import { AppShell } from "./components/AppShell";
 import { DocumentDrawer } from "./components/DocumentDrawer";
 import { SearchPalette } from "./components/SearchPalette";
-import { CollectionPage } from "./pages/CollectionPage";
-import { DouyinPage } from "./pages/DouyinPage";
 import { DailyHotPage } from "./pages/DailyHotPage";
 import { GraphPage } from "./pages/GraphPage";
-import { MaterialsPage } from "./pages/MaterialsPage";
 import { BooksPage } from "./pages/BooksPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { SystemPage } from "./pages/SystemPage";
 import { TopicsPage } from "./pages/TopicsPage";
-import { SocialInsightsPage, SocialTrendDetailPage } from "./pages/SocialInsightsPage";
+import { CareerPage } from "./pages/CareerPage";
+import { StockWatchlistPage } from "./pages/StockWatchlistPage";
+import { PromptsLibraryPage } from "./pages/PromptsLibraryPage";
+import { ServicesPage } from "./pages/ServicesPage";
 import { useVaultSync } from "./hooks/useVaultSync";
 
 const localWorkbench = import.meta.env.VITE_WORKBENCH_HOSTED !== "true";
@@ -24,10 +24,9 @@ export function App() {
   const [selectedDocumentId, setSelectedDocumentId] = useState(null);
   const [readerContext, setReaderContext] = useState(null);
   const vaultSync = useVaultSync(location.pathname);
-  const routeRevision =
-    location.pathname.startsWith("/social-insights")
-    ? location.pathname
-    : `${location.pathname}:${vaultSync.revision}`;
+  // key 只含 vault revision：路由切换走 Router 正常协调（不整树重建），
+  // 仅当 vault 文件变化（revision 递增）时强制重挂载当前页以刷新数据。
+  const routeRevision = String(vaultSync.revision);
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -75,30 +74,14 @@ export function App() {
         <Routes key={routeRevision}>
           <Route path="/" element={<OverviewPage onOpenDocument={openDocument} />} />
           <Route path="/graph" element={<GraphPage onOpenDocument={openDocument} />} />
-          <Route
-            path="/wiki"
-            element={
-              <CollectionPage
-                kind="wiki"
-                eyebrow="KNOWLEDGE LAYER"
-                title="Wiki 层"
-                description="结构化知识：来源拆解、概念、框架、诊断与待验证问题。星图的线性视图。"
-                onOpenDocument={openDocument}
-              />
-            }
-          />
-          <Route
-            path="/materials"
-            element={<MaterialsPage onOpenDocument={openDocument} />}
-          />
           <Route path="/books" element={<BooksPage onOpenDocument={openDocument} />} />
           <Route path="/books/:bookId" element={<BooksPage onOpenDocument={openDocument} />} />
           <Route path="/daily-hot" element={<DailyHotPage />} />
           {localWorkbench ? (
             <Route
-              path="/social-insights"
+              path="/career"
               element={
-                <SocialInsightsPage
+                <CareerPage
                   onOpenDocument={openDocument}
                   syncRevision={vaultSync.revision}
                 />
@@ -107,42 +90,21 @@ export function App() {
           ) : null}
           {localWorkbench ? (
             <Route
-              path="/social-insights/trends/:trendId"
+              path="/stocks"
               element={
-                <SocialTrendDetailPage
+                <StockWatchlistPage
                   onOpenDocument={openDocument}
                   syncRevision={vaultSync.revision}
                 />
               }
             />
           ) : null}
-          {localWorkbench ? (
-            <Route
-              path="/social-insights/:reportId"
-              element={
-                <SocialInsightsPage
-                  onOpenDocument={openDocument}
-                  syncRevision={vaultSync.revision}
-                />
-              }
-            />
-          ) : null}
+          {localWorkbench ? <Route path="/services" element={<ServicesPage />} /> : null}
           <Route
             path="/topics"
             element={<TopicsPage onOpenDocument={openDocument} />}
           />
-          <Route
-            path="/content"
-            element={
-              <CollectionPage
-                kind="content"
-                eyebrow="CONTENT PIPELINE"
-                title="内容中心"
-                onOpenDocument={openDocument}
-              />
-            }
-          />
-          <Route path="/douyin" element={<DouyinPage />} />
+          <Route path="/prompts" element={<PromptsLibraryPage />} />
           <Route path="/system" element={<SystemPage />} />
           <Route path="*" element={<Navigate replace to="/" />} />
         </Routes>

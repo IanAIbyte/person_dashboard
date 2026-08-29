@@ -79,6 +79,14 @@ test("maps changed paths to the smallest relevant invalidation scopes", () => {
       "social_insights",
     ],
   );
+  assert.deepEqual(affectedScopesForPaths(["10_raw/prompts/2026-08-29-x.md"]), [
+    "materials",
+    "overview",
+    "prompts",
+    "recent",
+    "runtime",
+    "search",
+  ]);
   assert.deepEqual(
     affectedScopesForPaths(["30_self_media/public-account/account-daily.csv"]),
     ["overview", "public_account", "recent", "runtime", "search"],

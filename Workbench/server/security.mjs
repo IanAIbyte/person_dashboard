@@ -282,7 +282,7 @@ function normalizeSingleLine(value, fallback) {
   return Array.from(normalized || fallback).slice(0, 120).join("");
 }
 
-function formatShanghaiDate(date) {
+export function formatShanghaiDate(date) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Shanghai",
     year: "numeric",

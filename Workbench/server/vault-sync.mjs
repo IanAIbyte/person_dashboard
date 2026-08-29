@@ -76,6 +76,9 @@ export function affectedScopesForPaths(paths = []) {
         scopes.add("douyin");
         scopes.add("overview");
       }
+      if (value.startsWith("10_raw/prompts/")) {
+        scopes.add("prompts");
+      }
       if (value.startsWith("10_raw/social-insights/")) {
         scopes.add("social_insights");
       }
