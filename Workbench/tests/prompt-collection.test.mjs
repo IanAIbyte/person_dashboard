@@ -95,3 +95,97 @@ test("list 按 updated 倒序、id 升序稳定排序", async (t) => {
     ["10_raw/prompts/a.md", "10_raw/prompts/b.md", "10_raw/prompts/c.md"],
   );
 });
+
+test("create 写出带 frontmatter 的 md，字段可往返解析，重名自动加后缀", async (t) => {
+  const vaultRoot = await makeVault(t);
+  const repository = createPromptCollectionRepository({
+    vaultRoot,
+    now: () => new Date("2026-08-29T06:30:00.000Z"),
+  });
+
+  const created = await repository.create({
+    title: "周报生成",
+    content: "帮我基于以下流水生成周报：\n1. ……",
+    tags: ["写作", "周报"],
+    source: "https://example.com/a",
+  });
+  assert.equal(created.id, "10_raw/prompts/2026-08-29-周报生成.md");
+  assert.equal(created.created, "2026-08-29"); // 上海时区日期
+  assert.equal(created.updated, "2026-08-29T06:30:00.000Z");
+
+  const raw = await readFile(
+    path.join(vaultRoot, "10_raw", "prompts", "2026-08-29-周报生成.md"),
+    "utf8",
+  );
+  assert.ok(raw.startsWith("---\n"));
+  const parsed = await repository.list();
+  const item = parsed.items.find((entry) => entry.id === created.id);
+  assert.equal(item.title, "周报生成");
+  assert.deepEqual(item.tags, ["写作", "周报"]);
+  assert.equal(item.source, "https://example.com/a");
+  assert.ok(item.content.includes("帮我基于以下流水生成周报"));
+
+  // 同名再建 → -2 后缀
+  const second = await repository.create({ title: "周报生成", content: "b" });
+  assert.equal(second.id, "10_raw/prompts/2026-08-29-周报生成-2.md");
+  // 无 source 时不写该键
+  assert.equal(second.source, "");
+  assert.ok(!raw.includes("source:") || second.id !== created.id);
+  const secondRaw = await readFile(
+    path.join(vaultRoot, "10_raw", "prompts", "2026-08-29-周报生成-2.md"),
+    "utf8",
+  );
+  assert.ok(!secondRaw.includes("source:"));
+});
+
+test("create 校验非法输入", async (t) => {
+  const vaultRoot = await makeVault(t);
+  const repository = createPromptCollectionRepository({ vaultRoot });
+  await assert.rejects(
+    repository.create({ title: "", content: "x" }),
+    (error) => error instanceof PromptCollectionError && error.code === "INVALID_TITLE",
+  );
+  await assert.rejects(
+    repository.create({ title: "t", content: "  " }),
+    (error) => error instanceof PromptCollectionError && error.code === "INVALID_CONTENT",
+  );
+  await assert.rejects(
+    repository.create({ title: "t", content: "x", tags: "写作" }),
+    (error) => error instanceof PromptCollectionError && error.code === "INVALID_TAG",
+  );
+  await assert.rejects(
+    repository.create({ title: "t", content: "x", source: "ftp://a" }),
+    (error) => error instanceof PromptCollectionError && error.code === "INVALID_SOURCE",
+  );
+});
+
+test("update 原地覆盖内容但保持文件名与 created 不变", async (t) => {
+  const vaultRoot = await makeVault(t);
+  let clock = 0;
+  const times = [
+    new Date("2026-08-29T06:00:00.000Z"),
+    new Date("2026-08-30T08:00:00.000Z"),
+  ];
+  const repository = createPromptCollectionRepository({ vaultRoot, now: () => times[clock++] });
+
+  const created = await repository.create({ title: "初稿", content: "v1", tags: ["a"] });
+  const updated = await repository.update(created.id, {
+    title: "改名字",
+    content: "v2",
+    tags: ["b", "c"],
+    source: "https://example.com/b",
+  });
+  assert.equal(updated.id, created.id); // 不重命名
+  assert.equal(updated.title, "改名字");
+  assert.equal(updated.created, "2026-08-29"); // created 保留
+  assert.equal(updated.updated, "2026-08-30T08:00:00.000Z");
+
+  const raw = await readFile(path.join(vaultRoot, created.id), "utf8");
+  assert.ok(raw.includes("v2"));
+  assert.ok(!raw.includes("初稿"));
+
+  await assert.rejects(
+    repository.update("10_raw/prompts/不存在.md", { title: "t", content: "x" }),
+    (error) => error instanceof PromptCollectionError && error.code === "PROMPT_NOT_FOUND",
+  );
+});

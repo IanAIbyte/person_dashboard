@@ -6,10 +6,13 @@ import { randomUUID } from "node:crypto";
 import {
   lstat,
   mkdir,
+  open,
   readdir,
   readFile,
   realpath,
+  rename,
   stat,
+  unlink,
 } from "node:fs/promises";
 import path from "node:path";
 
@@ -17,7 +20,9 @@ import matter from "gray-matter";
 
 import {
   DEFAULT_VAULT_ROOT,
+  formatShanghaiDate,
   isPathInside,
+  sanitizeFilenamePart,
 } from "./security.mjs";
 
 export const PROMPTS_DIRECTORY = "10_raw/prompts";
@@ -127,6 +132,134 @@ async function readItem(promptsDirectory, fileName) {
   };
 }
 
+function normalizeTitle(value) {
+  const title = String(value ?? "").trim();
+  if (!title) fail("INVALID_TITLE", "标题不能为空。");
+  if (title.length > MAX_TITLE_LENGTH) fail("INVALID_TITLE", "标题超过 200 字上限。");
+  return title;
+}
+
+function normalizeContent(value) {
+  const content = String(value ?? "").replace(/\r\n/g, "\n").trim();
+  if (!content) fail("INVALID_CONTENT", "提示词正文不能为空。");
+  if (content.length > MAX_CONTENT_LENGTH) fail("INVALID_CONTENT", "提示词正文超过 20000 字上限。");
+  return content;
+}
+
+function normalizeTags(value) {
+  if (value == null) return [];
+  if (!Array.isArray(value)) fail("INVALID_TAG", "标签必须是字符串数组。");
+  const tags = [];
+  for (const raw of value) {
+    const tag = String(raw ?? "").trim();
+    if (!tag) continue;
+    if (tag.length > MAX_TAG_LENGTH) fail("INVALID_TAG", "单个标签超过 32 字上限。");
+    if (!tags.includes(tag)) tags.push(tag);
+  }
+  if (tags.length > MAX_TAGS) fail("INVALID_TAG", "标签超过 20 个上限。");
+  return tags;
+}
+
+function normalizeSource(value) {
+  const source = String(value ?? "").trim();
+  if (!source) return "";
+  let parsed;
+  try {
+    parsed = new URL(source);
+  } catch {
+    fail("INVALID_SOURCE", "来源必须是合法 URL。");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    fail("INVALID_SOURCE", "来源必须以 http(s) 开头。");
+  }
+  return parsed.toString();
+}
+
+// gray-matter 的 stringify 负责 YAML 转义（标题可含冒号等特殊字符）。
+function renderMarkdown(item) {
+  const data = {
+    title: item.title,
+    tags: item.tags,
+    created: item.created,
+    updated: item.updated,
+  };
+  if (item.source) data.source = item.source;
+  return matter.stringify(`${item.content}\n`, data);
+}
+
+// ID → 文件名。白名单式校验：必须是 10_raw/prompts/ 下的单段 .md 文件名。
+function resolveId(id) {
+  const value = String(id ?? "");
+  const prefix = `${PROMPTS_DIRECTORY}/`;
+  if (!value.startsWith(prefix)) fail("INVALID_PROMPT_ID", "提示词 ID 不合法。");
+  const fileName = value.slice(prefix.length);
+  if (
+    !fileName ||
+    fileName.includes("/") ||
+    fileName.includes("\\") ||
+    fileName.includes("\0") ||
+    fileName.startsWith(".") ||
+    !fileName.endsWith(".md")
+  ) {
+    fail("INVALID_PROMPT_ID", "提示词 ID 不合法。");
+  }
+  return fileName;
+}
+
+// 原子写新文件：文件名被占用时换下一个后缀；返回实际文件名。
+async function writeNewFile(promptsDirectory, baseName, payload) {
+  for (let index = 0; index < 100; index += 1) {
+    const fileName = index === 0 ? `${baseName}.md` : `${baseName}-${index + 1}.md`;
+    const targetPath = path.join(promptsDirectory, fileName);
+    const temporaryPath = path.join(
+      promptsDirectory,
+      `.${fileName}.${randomUUID()}.tmp`,
+    );
+    let handle = null;
+    try {
+      handle = await open(temporaryPath, "wx", 0o600);
+      await handle.writeFile(payload, "utf8");
+      await handle.sync();
+      await handle.close();
+      handle = null;
+      try {
+        await lstat(targetPath);
+        continue; // 目标已被占用 → 换下一个名字（finally 清理 tmp）
+      } catch (error) {
+        if (error?.code !== "ENOENT") throw error;
+      }
+      await rename(temporaryPath, targetPath);
+      return fileName;
+    } finally {
+      if (handle) await handle.close().catch(() => {});
+      await unlink(temporaryPath).catch(() => {});
+    }
+  }
+  fail("PROMPT_FILE_NAME_EXHAUSTED", "无法生成不冲突的提示词文件名。");
+}
+
+// 原子覆盖既有文件（永不重命名）：tmp + rename。
+async function overwriteFile(promptsDirectory, fileName, payload) {
+  const targetPath = path.join(promptsDirectory, fileName);
+  const details = await lstat(targetPath).catch(() => null);
+  if (!details || details.isSymbolicLink() || !details.isFile()) {
+    fail("PROMPT_NOT_FOUND", "提示词不存在。");
+  }
+  const temporaryPath = path.join(promptsDirectory, `.${fileName}.${randomUUID()}.tmp`);
+  let handle = null;
+  try {
+    handle = await open(temporaryPath, "wx", 0o600);
+    await handle.writeFile(payload, "utf8");
+    await handle.sync();
+    await handle.close();
+    handle = null;
+    await rename(temporaryPath, targetPath);
+  } finally {
+    if (handle) await handle.close().catch(() => {});
+    await unlink(temporaryPath).catch(() => {});
+  }
+}
+
 export function createPromptCollectionRepository({
   vaultRoot = DEFAULT_VAULT_ROOT,
   now = () => new Date(),
@@ -157,5 +290,48 @@ export function createPromptCollectionRepository({
     return { items, tags };
   }
 
-  return Object.freeze({ list });
+  async function create(input) {
+    const realVaultRoot = await resolveVaultRoot(resolvedRoot);
+    const promptsDirectory = await ensurePromptsDirectory(realVaultRoot);
+    const existing = await readdir(promptsDirectory);
+    if (existing.length >= MAX_PROMPT_FILES) {
+      fail("TOO_MANY_PROMPTS", "提示词数量超过上限。");
+    }
+    const timestamp = now();
+    const item = {
+      title: normalizeTitle(input?.title),
+      content: normalizeContent(input?.content),
+      tags: normalizeTags(input?.tags),
+      source: normalizeSource(input?.source),
+      created: formatShanghaiDate(timestamp),
+      updated: timestamp.toISOString(),
+    };
+    const baseName = `${item.created}-${sanitizeFilenamePart(item.title, "prompt")}`;
+    const fileName = await writeNewFile(
+      promptsDirectory,
+      baseName,
+      renderMarkdown(item),
+    );
+    return { ...item, id: `${PROMPTS_DIRECTORY}/${fileName}` };
+  }
+
+  async function update(id, input) {
+    const realVaultRoot = await resolveVaultRoot(resolvedRoot);
+    const promptsDirectory = await ensurePromptsDirectory(realVaultRoot);
+    const fileName = resolveId(id);
+    const current = await readItem(promptsDirectory, fileName);
+    if (!current) fail("PROMPT_NOT_FOUND", "提示词不存在。");
+    const item = {
+      ...current,
+      title: normalizeTitle(input?.title),
+      content: normalizeContent(input?.content),
+      tags: normalizeTags(input?.tags),
+      source: normalizeSource(input?.source),
+      updated: now().toISOString(),
+    };
+    await overwriteFile(promptsDirectory, fileName, renderMarkdown(item));
+    return item;
+  }
+
+  return Object.freeze({ list, create, update });
 }
