@@ -91,30 +91,33 @@ export function createLlmClient({
         if (!response.ok) {
           const status = response.status;
           const text = await response.text().catch(() => "");
-          lastError = fail(
+          const error = new LlmClientError(
             "LLM_UPSTREAM_ERROR",
             `LLM 接口返回 ${status}`,
             { status, body: text.slice(0, 400) },
           );
-          // 429/5xx 可重试
-          if (attempt < maxRetries && (status === 429 || status >= 500)) continue;
-          throw lastError;
+          // 仅 429/5xx 可重试；4xx（密钥/参数错误）是确定性失败，重试只会重复计费。
+          if (attempt < maxRetries && (status === 429 || status >= 500)) {
+            lastError = error;
+            continue;
+          }
+          throw error;
         }
         const content = await readStreamContent(response);
         if (typeof content !== "string" || !content.trim()) {
-          throw fail("LLM_EMPTY_RESULT", "LLM 未返回有效内容。");
+          throw new LlmClientError("LLM_EMPTY_RESULT", "LLM 未返回有效内容。");
         }
         return content.trim();
       } catch (error) {
         if (error instanceof LlmClientError) {
-          lastError = error;
-          if (attempt < maxRetries) continue;
           throw error;
         }
-        // 网络错误 / 超时
-        lastError = fail("LLM_REQUEST_FAILED", error?.message || "LLM 请求失败。");
-        if (attempt < maxRetries) continue;
-        throw lastError;
+        // 网络错误 / 超时可重试。
+        if (attempt < maxRetries) {
+          lastError = new LlmClientError("LLM_REQUEST_FAILED", error?.message || "LLM 请求失败。");
+          continue;
+        }
+        throw new LlmClientError("LLM_REQUEST_FAILED", error?.message || "LLM 请求失败。");
       } finally {
         clearTimeout(timer);
         signal?.removeEventListener?.("abort", abortHandler);
